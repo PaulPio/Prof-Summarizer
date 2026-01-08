@@ -1,0 +1,7 @@
+{
+  "name": "ProfSummarizer",
+  "description": "A powerful academic assistant that transcribes college lectures and generates structured summaries, key takeaways, and study notes using Gemini AI.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
