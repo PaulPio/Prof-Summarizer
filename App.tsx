@@ -53,6 +53,8 @@ const App: React.FC = () => {
           picture: session.user.user_metadata.avatar_url || undefined
         });
       }
+      // Note: We don't automatically nullify user here because we want to allow the "guest" state to persist
+      // in the React state until explicit logout, even if Supabase has no session.
     });
 
     return () => subscription.unsubscribe();
