@@ -1,4 +1,11 @@
 
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  picture?: string;
+}
+
 export interface VocabularyItem {
   term: string;
   definition: string;
@@ -21,6 +28,7 @@ export interface LectureFile {
 
 export interface SavedLecture {
   id: string;
+  userId: string;
   title: string;
   date: string;
   transcript: string;
@@ -31,6 +39,7 @@ export interface SavedLecture {
 export enum AppState {
   IDLE = 'IDLE',
   RECORDING = 'RECORDING',
+  REVIEWING = 'REVIEWING',
   TRANSCRIBING = 'TRANSCRIBING',
   SUMMARIZING = 'SUMMARIZING',
   COMPLETED = 'COMPLETED',
