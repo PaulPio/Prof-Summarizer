@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AppState, SavedLecture, LectureFile, User } from './types';
 import { transcribeAudio, summarizeTranscript } from './services/geminiService';
-import { StorageService, FirestoreError } from './services/storageService';
-import { auth } from './services/firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { StorageService } from './services/storageService';
+import { supabase } from './services/supabase';
 import SummaryDisplay from './components/SummaryDisplay';
 import HistorySidebar from './components/HistorySidebar';
 import AuthForm from './components/AuthForm';
@@ -16,7 +15,6 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [recordingTime, setRecordingTime] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
-  const [errorUrl, setErrorUrl] = useState<string | undefined>(undefined);
   const [uploadedFiles, setUploadedFiles] = useState<LectureFile[]>([]);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -30,35 +28,45 @@ const App: React.FC = () => {
   const activeMimeTypeRef = useRef<string>('audio/wav');
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
         setUser({
-          id: firebaseUser.uid,
-          email: firebaseUser.email || '',
-          name: firebaseUser.displayName || 'Student',
-          picture: firebaseUser.photoURL || undefined
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata.full_name || session.user.user_metadata.name || 'Student',
+          picture: session.user.user_metadata.avatar_url || undefined
         });
-      } else {
-        setUser(null);
       }
       setIsInitialLoading(false);
     });
-    return () => unsubscribe();
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata.full_name || session.user.user_metadata.name || 'Student',
+          picture: session.user.user_metadata.avatar_url || undefined
+        });
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const fetchLectures = async () => {
     if (user) {
       setIsLoadingLectures(true);
       setErrorMessage('');
-      setErrorUrl(undefined);
       try {
         const data = await StorageService.getLectures(user.id);
         setLectures(data);
       } catch (err: any) {
         setErrorMessage(err.message);
-        if (err instanceof FirestoreError && err.setupUrl) {
-          setErrorUrl(err.setupUrl);
-        }
       } finally {
         setIsLoadingLectures(false);
       }
@@ -76,7 +84,9 @@ const App: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
+    if (user?.id !== 'guest') {
+      await supabase.auth.signOut();
+    }
     setUser(null);
     setStatus(AppState.IDLE);
     setCurrentLecture(null);
@@ -235,7 +245,7 @@ const App: React.FC = () => {
           const newLecture: SavedLecture = {
             id: '', 
             userId: user.id,
-            title: `Lecture ${new Date().toLocaleDateString()}`,
+            title: `Lecture ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`,
             date: new Date().toISOString(), 
             transcript: transcript,
             summary: summary,
@@ -262,11 +272,11 @@ const App: React.FC = () => {
   const deleteLecture = async (id: string) => {
     if (!user) return;
     try {
-      await StorageService.deleteLecture(id);
+      await StorageService.deleteLecture(id, user.id);
       setLectures(prev => prev.filter(l => l.id !== id));
       if (currentLecture?.id === id) setCurrentLecture(null);
     } catch (err) {
-      alert("Failed to delete lecture from cloud.");
+      alert("Failed to delete lecture.");
     }
   };
 
@@ -318,7 +328,13 @@ const App: React.FC = () => {
                     <p className="text-xs font-black text-gray-900 leading-tight">{user.name}</p>
                     <button onClick={handleLogout} className="text-[10px] font-bold text-red-500 hover:text-red-600 uppercase tracking-widest transition-colors">Logout</button>
                 </div>
-                {user.picture && <img src={user.picture} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white shadow-sm ring-1 ring-gray-100" />}
+                {user.picture ? (
+                  <img src={user.picture} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white shadow-sm ring-1 ring-gray-100" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full border-2 border-white bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                    {user.name.charAt(0)}
+                  </div>
+                )}
              </div>
             <button onClick={() => { setCurrentLecture(null); setStatus(AppState.IDLE); setUploadedFiles([]); }} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -338,18 +354,12 @@ const App: React.FC = () => {
             <div className="max-w-2xl mx-auto mb-8 bg-amber-50 border border-amber-200 p-6 rounded-3xl flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
               <div className="text-3xl">⚠️</div>
               <div className="flex-1 space-y-1">
-                <p className="text-amber-800 font-bold text-sm">Action Required: Database Setup</p>
+                <p className="text-amber-800 font-bold text-sm">Action Required: Data Sync</p>
                 <p className="text-amber-700 text-xs leading-relaxed">{errorMessage}</p>
               </div>
-              {errorUrl ? (
-                <a href={errorUrl} target="_blank" rel="noopener noreferrer" className="px-6 py-2 bg-amber-600 text-white text-xs font-black uppercase tracking-widest rounded-full hover:bg-amber-700 transition-colors whitespace-nowrap">
-                  Setup Index Now
-                </a>
-              ) : (
-                <button onClick={fetchLectures} className="px-6 py-2 bg-amber-600 text-white text-xs font-black uppercase tracking-widest rounded-full hover:bg-amber-700 transition-colors whitespace-nowrap">
-                  Retry
-                </button>
-              )}
+              <button onClick={fetchLectures} className="px-6 py-2 bg-amber-600 text-white text-xs font-black uppercase tracking-widest rounded-full hover:bg-amber-700 transition-colors whitespace-nowrap">
+                Retry
+              </button>
             </div>
           )}
 
@@ -359,7 +369,7 @@ const App: React.FC = () => {
                 <div className="w-24 h-24 bg-white text-blue-600 rounded-[32px] flex items-center justify-center mx-auto text-4xl shadow-2xl shadow-blue-100 ring-1 ring-gray-50">🎙️</div>
                 <div className="space-y-3">
                     <h2 className="text-4xl font-black text-gray-900 tracking-tight leading-tight">Extreme Lecture Capture</h2>
-                    <p className="text-gray-500 text-xl font-medium">Transcribe and summarize up to 90 minutes of audio. Secured by Firebase Cloud.</p>
+                    <p className="text-gray-500 text-xl font-medium">Transcribe and summarize up to 90 minutes of audio.</p>
                 </div>
               </div>
               <div className="flex justify-center">
@@ -460,8 +470,8 @@ const App: React.FC = () => {
 
         <footer className="h-12 px-8 flex items-center justify-between text-[11px] font-black uppercase tracking-widest text-gray-400 border-t bg-gray-50/50">
           <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-            <span>Firebase User: {user.email}</span>
+            <span className={`w-1.5 h-1.5 rounded-full ${user.id === 'guest' ? 'bg-amber-500' : 'bg-green-500'}`}></span>
+            <span>{user.id === 'guest' ? 'Guest Mode (Local Storage)' : `Supabase User: ${user.email}`}</span>
           </div>
           <span>Gemini 3 Flash &bull; Academic Model V2.1</span>
         </footer>
