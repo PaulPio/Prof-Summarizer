@@ -28,6 +28,28 @@ const App: React.FC = () => {
   const activeMimeTypeRef = useRef<string>('audio/wav');
 
   useEffect(() => {
+    // Handle OAuth callback - process tokens from URL hash
+    const handleOAuthCallback = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      
+      if (accessToken) {
+        // Exchange the tokens with Supabase to establish the session
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken || ''
+        });
+        
+        if (!error && data.session) {
+          // Clean up the URL hash
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      }
+    };
+
+    handleOAuthCallback();
+
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
