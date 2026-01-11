@@ -20,7 +20,7 @@ const App: React.FC = () => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isLoadingLectures, setIsLoadingLectures] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -33,14 +33,14 @@ const App: React.FC = () => {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get('access_token');
       const refreshToken = hashParams.get('refresh_token');
-      
+
       if (accessToken) {
         // Exchange the tokens with Supabase to establish the session
         const { data, error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken || ''
         });
-        
+
         if (!error && data.session) {
           // Clean up the URL hash
           window.history.replaceState(null, '', window.location.pathname);
@@ -159,7 +159,7 @@ const App: React.FC = () => {
     if (!files || files.length === 0) return;
     setIsOptimizing(true);
     const newFiles: LectureFile[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of Array.from(files) as File[]) {
       try {
         if (file.type.startsWith('image/')) {
           const optimized = await optimizeImage(file);
@@ -171,7 +171,7 @@ const App: React.FC = () => {
             previewUrl: optimized.previewUrl
           });
         } else {
-          const result = await new Promise<{base64: string, previewUrl?: string}>((resolve) => {
+          const result = await new Promise<{ base64: string, previewUrl?: string }>((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => {
               resolve({
@@ -204,8 +204,8 @@ const App: React.FC = () => {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }
       });
       const mimeTypes = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm', 'audio/wav'];
       let selectedMimeType = '';
@@ -267,10 +267,10 @@ const App: React.FC = () => {
           setStatus(AppState.SUMMARIZING);
           const summary = await summarizeTranscript(transcript, uploadedFiles);
           const newLecture: SavedLecture = {
-            id: '', 
+            id: '',
             userId: user.id,
             title: `Lecture ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`,
-            date: new Date().toISOString(), 
+            date: new Date().toISOString(),
             transcript: transcript,
             summary: summary,
             files: uploadedFiles.map(f => ({ name: f.name, mimeType: f.mimeType }))
@@ -328,49 +328,54 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/20 z-20 md:hidden" onClick={() => setIsSidebarOpen(false)} />
       )}
       <aside className={`fixed inset-y-0 left-0 z-30 w-72 transform transition-transform duration-300 md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <HistorySidebar 
-          lectures={lectures} 
-          onSelect={(l) => { setCurrentLecture(l); setStatus(AppState.COMPLETED); if (window.innerWidth < 768) setIsSidebarOpen(false); }} 
+        <HistorySidebar
+          lectures={lectures}
+          onSelect={(l) => { setCurrentLecture(l); setStatus(AppState.COMPLETED); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
           onDelete={deleteLecture}
           currentId={currentLecture?.id}
         />
       </aside>
       <main className="flex-1 flex flex-col min-w-0 relative">
-        <header className="h-20 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md border-b sticky top-0 z-10">
-          <div className="flex items-center gap-6">
+        <header className="h-16 md:h-20 flex items-center justify-between px-4 md:px-8 bg-white/80 backdrop-blur-md border-b sticky top-0 z-10">
+          <div className="flex items-center gap-3 md:gap-6">
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-xl text-gray-500 transition-colors">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-sm font-bold">🎓</div>
-              <h1 className="text-xl font-black text-gray-900 tracking-tight">ProfSummarizer</h1>
+              <div className="w-7 h-7 md:w-8 md:h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xs md:text-sm font-bold">🎓</div>
+              <h1 className="text-base md:text-xl font-black text-gray-900 tracking-tight hidden sm:block">ProfSummarizer</h1>
             </div>
           </div>
-          <div className="flex items-center gap-6">
-             <div className="hidden md:flex items-center gap-3">
-                <div className="text-right">
-                    <p className="text-xs font-black text-gray-900 leading-tight">{user.name}</p>
-                    <button onClick={handleLogout} className="text-[10px] font-bold text-red-500 hover:text-red-600 uppercase tracking-widest transition-colors">Logout</button>
+          <div className="flex items-center gap-3 md:gap-6">
+            <div className="hidden md:flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-xs font-black text-gray-900 leading-tight">{user.name}</p>
+                <button onClick={handleLogout} className="text-[10px] font-bold text-red-500 hover:text-red-600 uppercase tracking-widest transition-colors">Logout</button>
+              </div>
+              {user.picture ? (
+                <img src={user.picture} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white shadow-sm ring-1 ring-gray-100" />
+              ) : (
+                <div className="w-10 h-10 rounded-full border-2 border-white bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                  {user.name.charAt(0)}
                 </div>
-                {user.picture ? (
-                  <img src={user.picture} alt="Profile" className="w-10 h-10 rounded-full border-2 border-white shadow-sm ring-1 ring-gray-100" />
-                ) : (
-                  <div className="w-10 h-10 rounded-full border-2 border-white bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
-                    {user.name.charAt(0)}
-                  </div>
-                )}
-             </div>
-            <button onClick={() => { setCurrentLecture(null); setStatus(AppState.IDLE); setUploadedFiles([]); }} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0">
+              )}
+            </div>
+            {/* Mobile: show logout button */}
+            <button onClick={handleLogout} className="md:hidden p-2 text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            </button>
+            <button onClick={() => { setCurrentLecture(null); setStatus(AppState.IDLE); setUploadedFiles([]); }} className="px-3 py-2 md:px-5 md:py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold text-xs md:text-sm flex items-center gap-1.5 md:gap-2 shadow-lg shadow-blue-200 transition-all hover:-translate-y-0.5 active:translate-y-0">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              New Capture
+              <span className="hidden sm:inline">New Capture</span>
+              <span className="sm:hidden">New</span>
             </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 md:p-12">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-12">
           {isLoadingLectures && (
             <div className="flex items-center justify-center h-64 animate-pulse">
-               <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
 
@@ -388,17 +393,17 @@ const App: React.FC = () => {
           )}
 
           {status === AppState.IDLE && !currentLecture && !isLoadingLectures && (
-            <div className="max-w-2xl mx-auto space-y-12 mt-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
-              <div className="text-center space-y-6">
-                <div className="w-24 h-24 bg-white text-blue-600 rounded-[32px] flex items-center justify-center mx-auto text-4xl shadow-2xl shadow-blue-100 ring-1 ring-gray-50">🎙️</div>
-                <div className="space-y-3">
-                    <h2 className="text-4xl font-black text-gray-900 tracking-tight leading-tight">Extreme Lecture Capture</h2>
-                    <p className="text-gray-500 text-xl font-medium">Transcribe and summarize up to 90 minutes of audio.</p>
+            <div className="max-w-2xl mx-auto space-y-8 sm:space-y-12 mt-8 sm:mt-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
+              <div className="text-center space-y-4 sm:space-y-6">
+                <div className="w-16 h-16 sm:w-24 sm:h-24 bg-white text-blue-600 rounded-[24px] sm:rounded-[32px] flex items-center justify-center mx-auto text-2xl sm:text-4xl shadow-2xl shadow-blue-100 ring-1 ring-gray-50">🎙️</div>
+                <div className="space-y-2 sm:space-y-3 px-4">
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 tracking-tight leading-tight">Extreme Lecture Capture</h2>
+                  <p className="text-gray-500 text-base sm:text-lg md:text-xl font-medium">Transcribe and summarize up to 90 minutes of audio.</p>
                 </div>
               </div>
-              <div className="flex justify-center">
-                <button onClick={startRecording} className="px-16 py-6 bg-blue-600 text-white rounded-3xl text-2xl font-black hover:bg-blue-700 transition-all shadow-2xl shadow-blue-200 hover:scale-105 active:scale-95 flex items-center gap-4">
-                  <span className="w-4 h-4 bg-white rounded-full animate-pulse"></span>
+              <div className="flex justify-center px-4">
+                <button onClick={startRecording} className="w-full sm:w-auto px-8 sm:px-16 py-4 sm:py-6 bg-blue-600 text-white rounded-2xl sm:rounded-3xl text-lg sm:text-2xl font-black hover:bg-blue-700 transition-all shadow-2xl shadow-blue-200 hover:scale-105 active:scale-95 flex items-center justify-center gap-3 sm:gap-4">
+                  <span className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-full animate-pulse"></span>
                   Start Recording
                 </button>
               </div>
@@ -406,84 +411,84 @@ const App: React.FC = () => {
           )}
 
           {status === AppState.RECORDING && (
-            <div className="max-w-2xl mx-auto text-center space-y-12 mt-20">
-              <div className="space-y-6">
+            <div className="max-w-2xl mx-auto text-center space-y-8 sm:space-y-12 mt-12 sm:mt-20 px-4">
+              <div className="space-y-4 sm:space-y-6">
                 <div className="relative inline-block">
-                  <div className="w-32 h-32 bg-red-50 rounded-full flex items-center justify-center mx-auto ring-4 ring-red-100">
-                    <div className="w-8 h-8 bg-red-600 rounded-lg animate-pulse"></div>
+                  <div className="w-24 h-24 sm:w-32 sm:h-32 bg-red-50 rounded-full flex items-center justify-center mx-auto ring-4 ring-red-100">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 bg-red-600 rounded-lg animate-pulse"></div>
                   </div>
                   <div className="absolute inset-0 border-8 border-red-500 rounded-full animate-ping opacity-20"></div>
                 </div>
-                <h2 className="text-6xl font-mono font-black text-gray-900 tracking-tighter">{formatTime(recordingTime)}</h2>
+                <h2 className="text-4xl sm:text-5xl md:text-6xl font-mono font-black text-gray-900 tracking-tighter">{formatTime(recordingTime)}</h2>
                 <div className="flex flex-col items-center gap-2">
-                    <p className="text-red-600 font-black uppercase tracking-widest text-sm animate-pulse">Recording Active</p>
-                    <p className="text-gray-400 text-sm italic">Compressed 16kbps Mono &bull; Sync Enabled</p>
+                  <p className="text-red-600 font-black uppercase tracking-widest text-xs sm:text-sm animate-pulse">Recording Active</p>
+                  <p className="text-gray-400 text-xs sm:text-sm italic">Compressed 16kbps Mono &bull; Sync Enabled</p>
                 </div>
               </div>
-              <button onClick={stopRecording} className="px-14 py-6 bg-gray-900 text-white rounded-3xl text-xl font-black shadow-2xl">Stop & Review</button>
+              <button onClick={stopRecording} className="w-full sm:w-auto px-10 sm:px-14 py-4 sm:py-6 bg-gray-900 text-white rounded-2xl sm:rounded-3xl text-lg sm:text-xl font-black shadow-2xl">Stop & Review</button>
             </div>
           )}
 
           {status === AppState.REVIEWING && (
-            <div className="max-w-3xl mx-auto space-y-10 mt-4 pb-20">
-               <div className="text-center space-y-3">
-                <h2 className="text-3xl font-black text-gray-900">Review Lecture</h2>
-                <p className="text-gray-500 font-medium">Duration: {formatTime(recordingTime)}</p>
+            <div className="max-w-3xl mx-auto space-y-6 sm:space-y-10 mt-4 pb-20 px-2 sm:px-0">
+              <div className="text-center space-y-2 sm:space-y-3">
+                <h2 className="text-2xl sm:text-3xl font-black text-gray-900">Review Lecture</h2>
+                <p className="text-gray-500 font-medium text-sm sm:text-base">Duration: {formatTime(recordingTime)}</p>
               </div>
-              <div className="bg-white border-2 border-dashed border-gray-200 rounded-[40px] p-12 text-center hover:border-blue-400 group shadow-xl">
+              <div className="bg-white border-2 border-dashed border-gray-200 rounded-[24px] sm:rounded-[40px] p-6 sm:p-12 text-center hover:border-blue-400 group shadow-xl">
                 <input type="file" ref={fileInputRef} onChange={onFileChange} multiple accept="image/*,application/pdf" className="hidden" />
                 <div className="flex flex-col items-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                  <div className={`p-6 ${isOptimizing ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'} rounded-[32px] mb-6`}>
-                    {isOptimizing ? <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div> : <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>}
+                  <div className={`p-4 sm:p-6 ${isOptimizing ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'} rounded-[24px] sm:rounded-[32px] mb-4 sm:mb-6`}>
+                    {isOptimizing ? <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div> : <svg className="w-10 h-10 sm:w-12 sm:h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>}
                   </div>
-                  <h3 className="text-xl font-black text-gray-800">{isOptimizing ? 'Optimizing Media...' : 'Add Supplemental Files'}</h3>
-                  <p className="text-gray-400 mt-2">Whiteboard photos, slides, or syllabus PDFs</p>
+                  <h3 className="text-lg sm:text-xl font-black text-gray-800">{isOptimizing ? 'Optimizing Media...' : 'Add Supplemental Files'}</h3>
+                  <p className="text-gray-400 mt-2 text-sm sm:text-base">Whiteboard photos, slides, or syllabus PDFs</p>
                 </div>
                 {uploadedFiles.length > 0 && (
-                  <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className="mt-6 sm:mt-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-6">
                     {uploadedFiles.map(file => (
-                      <div key={file.id} className="relative aspect-square rounded-3xl border-2 overflow-hidden bg-gray-50 shadow-md">
-                        {file.previewUrl ? <img src={file.previewUrl} className="w-full h-full object-cover" /> : <div className="p-4 text-xs font-black truncate">{file.name}</div>}
-                        <button onClick={() => removeFile(file.id)} className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-2"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={3}/></svg></button>
+                      <div key={file.id} className="relative aspect-square rounded-2xl sm:rounded-3xl border-2 overflow-hidden bg-gray-50 shadow-md">
+                        {file.previewUrl ? <img src={file.previewUrl} className="w-full h-full object-cover" /> : <div className="p-3 sm:p-4 text-xs font-black truncate">{file.name}</div>}
+                        <button onClick={() => removeFile(file.id)} className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 bg-red-600 text-white rounded-full p-1.5 sm:p-2"><svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={3} /></svg></button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-              <div className="flex flex-col md:flex-row gap-6">
-                <button onClick={() => setStatus(AppState.IDLE)} className="flex-1 py-5 bg-white text-gray-500 rounded-3xl font-black border-2">Discard</button>
-                <button onClick={finalizeLecture} disabled={isOptimizing} className={`flex-[2] py-5 ${isOptimizing ? 'bg-gray-400' : 'bg-blue-600'} text-white rounded-3xl font-black text-xl shadow-2xl`}>Save & Summarize</button>
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-6">
+                <button onClick={() => setStatus(AppState.IDLE)} className="flex-1 py-4 sm:py-5 bg-white text-gray-500 rounded-2xl sm:rounded-3xl font-black border-2 text-sm sm:text-base">Discard</button>
+                <button onClick={finalizeLecture} disabled={isOptimizing} className={`flex-[2] py-4 sm:py-5 ${isOptimizing ? 'bg-gray-400' : 'bg-blue-600'} text-white rounded-2xl sm:rounded-3xl font-black text-lg sm:text-xl shadow-2xl`}>Save & Summarize</button>
               </div>
             </div>
           )}
 
           {(status === AppState.TRANSCRIBING || status === AppState.SUMMARIZING) && (
-            <div className="max-w-2xl mx-auto text-center space-y-12 mt-20 animate-pulse">
-              <div className="w-24 h-24 border-[12px] border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-              <h2 className="text-4xl font-black text-gray-900">{status === AppState.TRANSCRIBING ? "Transcribing..." : "Summarizing..."}</h2>
-              <p className="text-gray-500 text-lg">AI is processing your lecture with multimodal context.</p>
+            <div className="max-w-2xl mx-auto text-center space-y-8 sm:space-y-12 mt-12 sm:mt-20 animate-pulse px-4">
+              <div className="w-16 h-16 sm:w-24 sm:h-24 border-[8px] sm:border-[12px] border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900">{status === AppState.TRANSCRIBING ? "Transcribing..." : "Summarizing..."}</h2>
+              <p className="text-gray-500 text-base sm:text-lg">AI is processing your lecture with multimodal context.</p>
             </div>
           )}
 
           {status === AppState.ERROR && (
-            <div className="max-w-md mx-auto bg-white border p-12 rounded-[40px] text-center space-y-6 mt-20 shadow-2xl border-red-50">
-              <div className="text-7xl">⚠️</div>
-              <h3 className="text-2xl font-black">Something went wrong</h3>
-              <p className="text-red-500 font-medium">{errorMessage}</p>
-              <button onClick={() => setStatus(AppState.IDLE)} className="w-full py-5 bg-gray-900 text-white rounded-2xl font-black hover:bg-black transition-all">Back Home</button>
+            <div className="max-w-md mx-auto bg-white border p-8 sm:p-12 rounded-[24px] sm:rounded-[40px] text-center space-y-4 sm:space-y-6 mt-12 sm:mt-20 shadow-2xl border-red-50 mx-4 sm:mx-auto">
+              <div className="text-5xl sm:text-7xl">⚠️</div>
+              <h3 className="text-xl sm:text-2xl font-black">Something went wrong</h3>
+              <p className="text-red-500 font-medium text-sm sm:text-base">{errorMessage}</p>
+              <button onClick={() => setStatus(AppState.IDLE)} className="w-full py-4 sm:py-5 bg-gray-900 text-white rounded-xl sm:rounded-2xl font-black hover:bg-black transition-all text-sm sm:text-base">Back Home</button>
             </div>
           )}
 
           {status === AppState.COMPLETED && currentLecture && (
-            <div className="max-w-4xl mx-auto pb-24">
+            <div className="max-w-4xl mx-auto pb-24 px-2 sm:px-0">
               <SummaryDisplay summary={currentLecture.summary} title={currentLecture.title} />
-              <div className="mt-16 pt-16 border-t border-gray-100">
+              <div className="mt-10 sm:mt-16 pt-10 sm:pt-16 border-t border-gray-100">
                 <details className="group">
-                  <summary className="flex items-center justify-between cursor-pointer list-none p-6 bg-white rounded-[32px] border shadow-sm hover:bg-gray-50 transition-all">
-                    <span className="font-black text-gray-800">Review Full Transcript Archive</span>
+                  <summary className="flex items-center justify-between cursor-pointer list-none p-4 sm:p-6 bg-white rounded-[20px] sm:rounded-[32px] border shadow-sm hover:bg-gray-50 transition-all">
+                    <span className="font-black text-gray-800 text-sm sm:text-base">Review Full Transcript Archive</span>
                     <span className="group-open:rotate-180 transition-transform">▼</span>
                   </summary>
-                  <div className="mt-6 p-10 bg-gray-900 text-blue-100 rounded-[40px] shadow-2xl font-mono text-sm leading-relaxed max-h-[600px] overflow-y-auto">
+                  <div className="mt-4 sm:mt-6 p-4 sm:p-10 bg-gray-900 text-blue-100 rounded-[20px] sm:rounded-[40px] shadow-2xl font-mono text-xs sm:text-sm leading-relaxed max-h-[400px] sm:max-h-[600px] overflow-y-auto">
                     {currentLecture.transcript}
                   </div>
                 </details>
@@ -492,12 +497,13 @@ const App: React.FC = () => {
           )}
         </div>
 
-        <footer className="h-12 px-8 flex items-center justify-between text-[11px] font-black uppercase tracking-widest text-gray-400 border-t bg-gray-50/50">
+        <footer className="min-h-[48px] px-4 sm:px-8 py-2 sm:py-0 flex flex-col sm:flex-row items-center justify-center sm:justify-between gap-1 sm:gap-0 text-[9px] sm:text-[11px] font-black uppercase tracking-widest text-gray-400 border-t bg-gray-50/50">
           <div className="flex items-center gap-2">
             <span className={`w-1.5 h-1.5 rounded-full ${user.id === 'guest' ? 'bg-amber-500' : 'bg-green-500'}`}></span>
-            <span>{user.id === 'guest' ? 'Guest Mode (Local Storage)' : `Supabase User: ${user.email}`}</span>
+            <span className="truncate max-w-[200px] sm:max-w-none">{user.id === 'guest' ? 'Guest Mode' : user.email}</span>
           </div>
-          <span>Gemini 3 Flash &bull; Academic Model V2.1</span>
+          <span className="hidden sm:inline">Gemini 3 Flash &bull; Academic Model V2.1</span>
+          <span className="sm:hidden">Gemini 3 Flash</span>
         </footer>
       </main>
     </div>
