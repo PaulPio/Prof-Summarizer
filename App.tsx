@@ -12,7 +12,7 @@ const App: React.FC = () => {
   const [status, setStatus] = useState<AppState>(AppState.IDLE);
   const [lectures, setLectures] = useState<SavedLecture[]>([]);
   const [currentLecture, setCurrentLecture] = useState<SavedLecture | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<LectureFile[]>([]);
@@ -25,6 +25,7 @@ const App: React.FC = () => {
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const activeMimeTypeRef = useRef<string>('audio/wav');
 
   useEffect(() => {
@@ -202,6 +203,42 @@ const App: React.FC = () => {
     setUploadedFiles(prev => prev.filter(f => f.id !== id));
   };
 
+  // Download the recorded audio file
+  const downloadRecording = () => {
+    if (!recordedBlob) return;
+    const url = URL.createObjectURL(recordedBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    const extension = activeMimeTypeRef.current.includes('webm') ? 'webm' :
+      activeMimeTypeRef.current.includes('mp4') ? 'm4a' :
+        activeMimeTypeRef.current.includes('ogg') ? 'ogg' : 'wav';
+    a.download = `lecture_${new Date().toISOString().slice(0, 10)}_${new Date().toLocaleTimeString().replace(/:/g, '-')}.${extension}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Handle audio file upload
+  const onAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate it's an audio file
+    if (!file.type.startsWith('audio/')) {
+      setErrorMessage('Please upload an audio file (MP3, WAV, WebM, M4A, OGG)');
+      setStatus(AppState.ERROR);
+      return;
+    }
+
+    activeMimeTypeRef.current = file.type;
+    setRecordedBlob(file);
+    setRecordingTime(0); // We don't know the duration yet
+    setStatus(AppState.REVIEWING);
+
+    if (audioInputRef.current) audioInputRef.current.value = '';
+  };
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -251,10 +288,10 @@ const App: React.FC = () => {
 
   const finalizeLecture = async () => {
     if (!recordedBlob || !user) return;
-    if (recordedBlob.size > 14.5 * 1024 * 1024) {
-      setErrorMessage(`Lecture too large. Audio data is ${(recordedBlob.size / 1024 / 1024).toFixed(1)}MB.`);
-      setStatus(AppState.ERROR);
-      return;
+
+    // Show warning for large files but don't block (removed hard limit)
+    if (recordedBlob.size > 50 * 1024 * 1024) {
+      console.warn(`Large audio file: ${(recordedBlob.size / 1024 / 1024).toFixed(1)}MB - processing may take longer`);
     }
     setStatus(AppState.TRANSCRIBING);
     try {
@@ -398,15 +435,21 @@ const App: React.FC = () => {
                 <div className="w-16 h-16 sm:w-24 sm:h-24 bg-white text-blue-600 rounded-[24px] sm:rounded-[32px] flex items-center justify-center mx-auto text-2xl sm:text-4xl shadow-2xl shadow-blue-100 ring-1 ring-gray-50">🎙️</div>
                 <div className="space-y-2 sm:space-y-3 px-4">
                   <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 tracking-tight leading-tight">Extreme Lecture Capture</h2>
-                  <p className="text-gray-500 text-base sm:text-lg md:text-xl font-medium">Transcribe and summarize up to 90 minutes of audio.</p>
+                  <p className="text-gray-500 text-base sm:text-lg md:text-xl font-medium">Transcribe and summarize your lectures with AI.</p>
                 </div>
               </div>
-              <div className="flex justify-center px-4">
-                <button onClick={startRecording} className="w-full sm:w-auto px-8 sm:px-16 py-4 sm:py-6 bg-blue-600 text-white rounded-2xl sm:rounded-3xl text-lg sm:text-2xl font-black hover:bg-blue-700 transition-all shadow-2xl shadow-blue-200 hover:scale-105 active:scale-95 flex items-center justify-center gap-3 sm:gap-4">
-                  <span className="w-3 h-3 sm:w-4 sm:h-4 bg-white rounded-full animate-pulse"></span>
+              <div className="flex flex-col sm:flex-row justify-center gap-4 px-4">
+                <button onClick={startRecording} className="flex-1 sm:flex-none px-8 sm:px-12 py-4 sm:py-6 bg-blue-600 text-white rounded-2xl sm:rounded-3xl text-lg sm:text-xl font-black hover:bg-blue-700 transition-all shadow-2xl shadow-blue-200 hover:scale-105 active:scale-95 flex items-center justify-center gap-3">
+                  <span className="w-3 h-3 bg-white rounded-full animate-pulse"></span>
                   Start Recording
                 </button>
+                <input type="file" ref={audioInputRef} onChange={onAudioUpload} accept="audio/*" className="hidden" />
+                <button onClick={() => audioInputRef.current?.click()} className="flex-1 sm:flex-none px-8 sm:px-12 py-4 sm:py-6 bg-white text-gray-700 border-2 border-gray-200 rounded-2xl sm:rounded-3xl text-lg sm:text-xl font-black hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center justify-center gap-3">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                  Upload Audio
+                </button>
               </div>
+              <p className="text-center text-gray-400 text-xs sm:text-sm">Supports MP3, WAV, WebM, M4A, OGG • No file size limit</p>
             </div>
           )}
 
@@ -457,6 +500,10 @@ const App: React.FC = () => {
               </div>
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-6">
                 <button onClick={() => setStatus(AppState.IDLE)} className="flex-1 py-4 sm:py-5 bg-white text-gray-500 rounded-2xl sm:rounded-3xl font-black border-2 text-sm sm:text-base">Discard</button>
+                <button onClick={downloadRecording} className="flex-1 py-4 sm:py-5 bg-gray-100 text-gray-700 rounded-2xl sm:rounded-3xl font-black border-2 border-gray-200 text-sm sm:text-base flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Download
+                </button>
                 <button onClick={finalizeLecture} disabled={isOptimizing} className={`flex-[2] py-4 sm:py-5 ${isOptimizing ? 'bg-gray-400' : 'bg-blue-600'} text-white rounded-2xl sm:rounded-3xl font-black text-lg sm:text-xl shadow-2xl`}>Save & Summarize</button>
               </div>
             </div>

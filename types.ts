@@ -16,6 +16,7 @@ export interface LectureSummary {
   keyPoints: string[];
   vocabulary: VocabularyItem[];
   actionItems: string[];
+  transcriptOnly?: boolean; // True when AI summarization failed and only transcript is available
 }
 
 export interface LectureFile {
