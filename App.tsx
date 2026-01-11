@@ -12,7 +12,7 @@ const App: React.FC = () => {
   const [status, setStatus] = useState<AppState>(AppState.IDLE);
   const [lectures, setLectures] = useState<SavedLecture[]>([]);
   const [currentLecture, setCurrentLecture] = useState<SavedLecture | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<LectureFile[]>([]);
