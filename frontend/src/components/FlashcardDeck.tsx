@@ -68,18 +68,22 @@ const FlashcardDeck: React.FC<FlashcardDeckProps> = ({ flashcards }) => {
                 />
             </div>
 
-            {/* Flashcard */}
+            {/* Flashcard with proper 3D flip */}
             <div
-                className="perspective-1000 cursor-pointer"
+                className="cursor-pointer"
                 onClick={toggleFlip}
+                style={{ perspective: '1000px' }}
             >
                 <div
-                    className={`relative w-full h-64 sm:h-80 transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}
-                    style={{ transformStyle: 'preserve-3d' }}
+                    className="relative w-full h-64 sm:h-80 transition-transform duration-500"
+                    style={{
+                        transformStyle: 'preserve-3d',
+                        transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
+                    }}
                 >
                     {/* Front - Term */}
                     <div
-                        className="absolute inset-0 w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-xl flex items-center justify-center p-6 text-white backface-hidden"
+                        className="absolute inset-0 w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl shadow-xl flex items-center justify-center p-6 text-white"
                         style={{ backfaceVisibility: 'hidden' }}
                     >
                         <div className="text-center">
@@ -90,8 +94,11 @@ const FlashcardDeck: React.FC<FlashcardDeckProps> = ({ flashcards }) => {
 
                     {/* Back - Definition */}
                     <div
-                        className="absolute inset-0 w-full h-full bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-xl flex items-center justify-center p-6 text-white rotate-y-180 backface-hidden"
-                        style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+                        className="absolute inset-0 w-full h-full bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-xl flex items-center justify-center p-6 text-white"
+                        style={{
+                            backfaceVisibility: 'hidden',
+                            transform: 'rotateY(180deg)'
+                        }}
                     >
                         <div className="text-center">
                             <p className="text-xs uppercase tracking-wider text-emerald-200 mb-3">Definition</p>
