@@ -9,6 +9,7 @@ import HistorySidebar from './components/HistorySidebar';
 import AuthForm from './components/AuthForm';
 import ConfusionButton from './components/ConfusionButton';
 import StudyModePanel from './components/StudyModePanel';
+import ChatWindow from './components/ChatWindow';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -29,6 +30,9 @@ const App: React.FC = () => {
 
   // Study Mode: View toggle
   const [showCornellNotes, setShowCornellNotes] = useState(true);
+
+  // Chat window state
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -635,6 +639,30 @@ const App: React.FC = () => {
           <span className="hidden sm:inline">Gemini 2.0 Flash • Study Mode V1.0</span>
           <span className="sm:hidden">Gemini 2.0 Flash</span>
         </footer>
+
+        {/* Floating Ask Professor Chat Button */}
+        {currentLecture && status === AppState.COMPLETED && (
+          <>
+            <button
+              onClick={() => setIsChatOpen(true)}
+              className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full shadow-lg shadow-indigo-200 hover:shadow-xl hover:scale-110 transition-all flex items-center justify-center group"
+              title="Ask Professor"
+            >
+              <span className="text-2xl">💬</span>
+              <div className="absolute right-full mr-3 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                <div className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-lg">
+                  Ask Professor
+                  <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-gray-900"></div>
+                </div>
+              </div>
+            </button>
+            <ChatWindow
+              transcript={currentLecture.transcript}
+              isOpen={isChatOpen}
+              onClose={() => setIsChatOpen(false)}
+            />
+          </>
+        )}
       </main>
     </div>
   );
