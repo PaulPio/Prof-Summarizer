@@ -418,10 +418,18 @@ const App: React.FC = () => {
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-xl text-gray-500 transition-colors">
               <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
-            <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setCurrentLecture(null);
+                setStatus(AppState.IDLE);
+                setConfusionMarkers([]);
+                setIsChatOpen(false);
+              }}
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+            >
               <div className="w-7 h-7 md:w-8 md:h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xs md:text-sm font-bold">🎓</div>
               <h1 className="text-base md:text-xl font-black text-gray-900 tracking-tight hidden sm:block">ProfSummarizer</h1>
-            </div>
+            </button>
           </div>
           <div className="flex items-center gap-3 md:gap-6">
             <div className="hidden md:flex items-center gap-3">
