@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Flashcard, QuizQuestion } from '../types';
 import { API } from '../services/api';
 import FlashcardDeck from './FlashcardDeck';
@@ -32,6 +32,15 @@ const StudyModePanel: React.FC<StudyModePanelProps> = ({
     const [questionCount, setQuestionCount] = useState(5);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Reset state when lecture changes
+    useEffect(() => {
+        setFlashcards(initialFlashcards || []);
+        setQuizQuestions(initialQuizData || []);
+        setActiveTab('flashcards');
+        setError(null);
+        setIsChatOpen(false);
+    }, [lectureId, initialFlashcards, initialQuizData]);
 
     const handleGenerateFlashcards = async () => {
         setIsLoadingFlashcards(true);
@@ -90,8 +99,8 @@ const StudyModePanel: React.FC<StudyModePanelProps> = ({
                             }
                         }}
                         className={`flex-1 px-4 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === tab.id
-                                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
-                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                            ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                             }`}
                     >
                         <span>{tab.icon}</span>
@@ -178,8 +187,8 @@ const StudyModePanel: React.FC<StudyModePanelProps> = ({
                                                 key={count}
                                                 onClick={() => setQuestionCount(count)}
                                                 className={`w-10 h-10 rounded-lg font-medium text-sm transition-colors ${questionCount === count
-                                                        ? 'bg-purple-600 text-white'
-                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                    ? 'bg-purple-600 text-white'
+                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                                     }`}
                                             >
                                                 {count}
