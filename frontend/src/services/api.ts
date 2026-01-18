@@ -1,7 +1,7 @@
 import { ChatMessage, Flashcard, QuizQuestion, LectureSummary, CornellNotes } from '../types';
 
-const SUPABASE_URL = 'https://sqlwvjbiququbvnqzvub.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxbHd2amJpcXVxdWJ2bnF6dnViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5OTcxODUsImV4cCI6MjA4MzU3MzE4NX0.Bk66zpHYPjWbqxAKQnT6eUVHzVWAyJ7zPhLKipW4thE';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 
 async function callEdgeFunction<T>(functionName: string, body: any): Promise<T> {
@@ -22,7 +22,6 @@ async function callEdgeFunction<T>(functionName: string, body: any): Promise<T> 
 
     return response.json();
 }
-
 
 export const API = {
     /**
