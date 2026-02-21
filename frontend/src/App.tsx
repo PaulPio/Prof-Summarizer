@@ -369,7 +369,11 @@ const App: React.FC = () => {
     if (currentLecture && user) {
       const updated = { ...currentLecture, flashcards };
       setCurrentLecture(updated);
-      // Update in storage (optional - could add updateLecture method)
+      try {
+        await StorageService.updateLectureFlashcards(currentLecture.id, user.id, flashcards);
+      } catch (err) {
+        console.error("Failed to save flashcards:", err);
+      }
     }
   };
 
@@ -378,6 +382,11 @@ const App: React.FC = () => {
     if (currentLecture && user) {
       const updated = { ...currentLecture, quizData };
       setCurrentLecture(updated);
+      try {
+        await StorageService.updateLectureQuiz(currentLecture.id, user.id, quizData);
+      } catch (err) {
+        console.error("Failed to save quiz data:", err);
+      }
     }
   };
 
