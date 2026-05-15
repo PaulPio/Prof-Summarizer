@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
         const aiConfig = user ? await resolveAIConfig(user.id) : {
             provider: 'gemini' as const,
             apiKey: Deno.env.get('GEMINI_API_KEY')!,
-            model: 'gemini-2.0-flash',
+            model: 'gemini-3.0-flash-preview',
         };
 
         const systemInstruction = `You are a professional academic transcriber. Transcribe the audio exactly as spoken. Use [inaudible] for unclear sections. Preserve technical terms verbatim. Do not translate. Do not include preamble. Output only the transcription text.`;

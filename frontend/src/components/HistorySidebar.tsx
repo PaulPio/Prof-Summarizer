@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { SavedLecture, Course } from '../types';
 import { StorageService } from '../services/storageService';
 import { useAppContext } from '../context/AppContext';
 import CourseManager from './CourseManager';
 import AgentJobStatusBar from './AgentJobStatusBar';
+
+const LECTURE_DRAG_MIME = 'application/x-lecture-id';
 
 interface HistorySidebarProps {
   lectures: SavedLecture[];
@@ -13,10 +15,12 @@ interface HistorySidebarProps {
 }
 
 const HistorySidebar: React.FC<HistorySidebarProps> = ({ lectures, onSelect, onDelete, currentId }) => {
-  const { user, courses, setCourses } = useAppContext();
+  const { user, courses, setCourses, setLectures, fetchLectures } = useAppContext();
   const [showCourseManager, setShowCourseManager] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [collapsedCourses, setCollapsedCourses] = useState<Set<string>>(new Set());
+  const [draggingLectureId, setDraggingLectureId] = useState<string | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);
 
   const toggleCollapse = (courseId: string) => {
     setCollapsedCourses(prev => {
@@ -25,6 +29,60 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ lectures, onSelect, onD
       else next.add(courseId);
       return next;
     });
+  };
+
+  const assignLectureToCourse = useCallback(async (lectureId: string, courseId: string | null) => {
+    if (!user) return;
+
+    const lecture = lectures.find(l => l.id === lectureId);
+    if (!lecture) return;
+
+    const currentCourseId = lecture.courseId ?? null;
+    if (currentCourseId === courseId) return;
+
+    const previousLectures = lectures;
+    setLectures(prev =>
+      prev.map(l =>
+        l.id === lectureId ? { ...l, courseId: courseId ?? undefined } : l
+      )
+    );
+
+    if (courseId) {
+      setCollapsedCourses(prev => {
+        const next = new Set(prev);
+        next.delete(courseId);
+        return next;
+      });
+    }
+
+    try {
+      await StorageService.updateLectureCourse(lectureId, user.id, courseId);
+    } catch (err) {
+      console.error('Failed to assign lecture to course:', err);
+      setLectures(previousLectures);
+      fetchLectures();
+    }
+  }, [user, lectures, setLectures, fetchLectures]);
+
+  const handleDragOver = (e: React.DragEvent, target: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverTarget(target);
+  };
+
+  const handleDrop = (e: React.DragEvent, courseId: string | null) => {
+    e.preventDefault();
+    const lectureId = e.dataTransfer.getData(LECTURE_DRAG_MIME);
+    if (lectureId) {
+      assignLectureToCourse(lectureId, courseId);
+    }
+    setDragOverTarget(null);
+    setDraggingLectureId(null);
+  };
+
+  const clearDragState = () => {
+    setDragOverTarget(null);
+    setDraggingLectureId(null);
   };
 
   const handleCreateCourse = async (name: string, color: string) => {
@@ -61,26 +119,41 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ lectures, onSelect, onD
 
   const uncategorized = lectures.filter(l => !l.courseId);
   const getLectures = (courseId: string) => lectures.filter(l => l.courseId === courseId);
+  const showUncategorizedSection = uncategorized.length > 0 || courses.length > 0;
 
-  const LectureItem = ({ lecture }: { lecture: SavedLecture }) => (
-    <div
-      className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all ${currentId === lecture.id ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50 border-transparent'} border`}
-      onClick={() => onSelect(lecture)}
-    >
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900 truncate">{lecture.title}</p>
-        <p className="text-xs text-gray-500">{new Date(lecture.date).toLocaleDateString()}</p>
-      </div>
-      <button
-        onClick={(e) => { e.stopPropagation(); onDelete(lecture.id); }}
-        className="hidden group-hover:block p-1 text-gray-400 hover:text-red-500 transition-colors"
+  const LectureItem = ({ lecture }: { lecture: SavedLecture }) => {
+    const isDragging = draggingLectureId === lecture.id;
+    return (
+      <div
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData(LECTURE_DRAG_MIME, lecture.id);
+          e.dataTransfer.effectAllowed = 'move';
+          setDraggingLectureId(lecture.id);
+        }}
+        onDragEnd={clearDragState}
+        className={`group flex items-center justify-between p-3 rounded-lg cursor-grab active:cursor-grabbing transition-all border ${
+          isDragging ? 'opacity-40' : ''
+        } ${currentId === lecture.id ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50 border-transparent'}`}
+        onClick={() => onSelect(lecture)}
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
-      </button>
-    </div>
-  );
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-900 truncate">{lecture.title}</p>
+          <p className="text-xs text-gray-500">{new Date(lecture.date).toLocaleDateString()}</p>
+        </div>
+        <button
+          draggable={false}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onDelete(lecture.id); }}
+          className="hidden group-hover:block p-1 text-gray-400 hover:text-red-500 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="h-full bg-white border-r overflow-y-auto flex flex-col">
@@ -110,14 +183,22 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ lectures, onSelect, onD
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Course groups */}
             {courses.map(course => {
               const courseLectures = getLectures(course.id);
               const isCollapsed = collapsedCourses.has(course.id);
+              const isDropTarget = dragOverTarget === course.id;
               return (
-                <div key={course.id}>
+                <div
+                  key={course.id}
+                  className={`rounded-lg transition-colors ${isDropTarget ? 'ring-2 ring-offset-1 bg-gray-50' : ''}`}
+                  style={isDropTarget ? { ringColor: course.color } : undefined}
+                  onDragOver={(e) => handleDragOver(e, course.id)}
+                  onDragLeave={() => setDragOverTarget(prev => (prev === course.id ? null : prev))}
+                  onDrop={(e) => handleDrop(e, course.id)}
+                >
                   <div className="flex items-center gap-2 mb-1 group">
                     <button
+                      type="button"
                       onClick={() => toggleCollapse(course.id)}
                       className="flex items-center gap-2 flex-1 text-left"
                     >
@@ -129,35 +210,50 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ lectures, onSelect, onD
                       </svg>
                     </button>
                     <div className="hidden group-hover:flex gap-1">
-                      <button onClick={() => setEditingCourse(course)} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 transition-colors">
+                      <button type="button" onClick={() => setEditingCourse(course)} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 transition-colors">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                       </button>
-                      <button onClick={() => handleDeleteCourse(course.id)} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-red-500 transition-colors">
+                      <button type="button" onClick={() => handleDeleteCourse(course.id)} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-red-500 transition-colors">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       </button>
                     </div>
                   </div>
                   {!isCollapsed && courseLectures.length === 0 && (
-                    <p className="text-xs text-gray-400 italic pl-4 py-1">No lectures yet</p>
+                    <p className="text-xs text-gray-400 italic pl-4 py-2 min-h-[2rem]">
+                      {isDropTarget ? 'Release to add lecture' : 'No lectures yet — drag here'}
+                    </p>
                   )}
                   {!isCollapsed && (
                     <div className="space-y-1 pl-2">
                       {courseLectures.map(lecture => <LectureItem key={lecture.id} lecture={lecture} />)}
                     </div>
                   )}
+                  {isCollapsed && isDropTarget && (
+                    <p className="text-xs text-gray-500 italic pl-4 py-2">Release to add lecture</p>
+                  )}
                 </div>
               );
             })}
 
-            {/* Uncategorized */}
-            {uncategorized.length > 0 && (
-              <div>
+            {showUncategorizedSection && (
+              <div
+                className={`rounded-lg transition-colors ${dragOverTarget === 'uncategorized' ? 'ring-2 ring-gray-300 ring-offset-1 bg-gray-50' : ''}`}
+                onDragOver={(e) => handleDragOver(e, 'uncategorized')}
+                onDragLeave={() => setDragOverTarget(prev => (prev === 'uncategorized' ? null : prev))}
+                onDrop={(e) => handleDrop(e, null)}
+              >
                 {courses.length > 0 && (
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Uncategorized</p>
                 )}
-                <div className="space-y-1">
-                  {uncategorized.map(lecture => <LectureItem key={lecture.id} lecture={lecture} />)}
-                </div>
+                {uncategorized.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic py-2 min-h-[2rem]">
+                    {dragOverTarget === 'uncategorized' ? 'Release to uncategorize' : 'Drop lectures here to uncategorize'}
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {uncategorized.map(lecture => <LectureItem key={lecture.id} lecture={lecture} />)}
+                  </div>
+                )}
               </div>
             )}
           </div>

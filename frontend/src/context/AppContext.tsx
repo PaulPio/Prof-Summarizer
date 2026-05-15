@@ -1,42 +1,20 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { User, SavedLecture, Course, UserSettings, AgentJob } from '../types';
+// @refresh reset
+import React, { useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { User, AgentJob } from '../types';
 import { supabase } from '../services/supabase';
 import { StorageService } from '../services/storageService';
 import { SettingsService } from '../services/settingsService';
+import { AppContext, type AppContextValue } from './appContextInstance';
 
-interface AppContextValue {
-  user: User | null;
-  setUser: (user: User | null) => void;
-  lectures: SavedLecture[];
-  setLectures: React.Dispatch<React.SetStateAction<SavedLecture[]>>;
-  isLoadingLectures: boolean;
-  fetchLectures: () => Promise<void>;
-  deleteLecture: (id: string) => Promise<void>;
-  courses: Course[];
-  setCourses: React.Dispatch<React.SetStateAction<Course[]>>;
-  fetchCourses: () => Promise<void>;
-  activeCourseId: string | null;
-  setActiveCourseId: React.Dispatch<React.SetStateAction<string | null>>;
-  userSettings: UserSettings | null;
-  setUserSettings: React.Dispatch<React.SetStateAction<UserSettings | null>>;
-  isSidebarOpen: boolean;
-  setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  isInitialLoading: boolean;
-  agentJobs: AgentJob[];
-  addAgentJob: (job: AgentJob) => void;
-  updateAgentJob: (id: string, patch: Partial<AgentJob>) => void;
-  dismissAgentJob: (id: string) => void;
-}
-
-const AppContext = createContext<AppContextValue | null>(null);
+export type { AppContextValue };
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [lectures, setLectures] = useState<SavedLecture[]>([]);
+  const [lectures, setLectures] = useState<AppContextValue['lectures']>([]);
   const [isLoadingLectures, setIsLoadingLectures] = useState(false);
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [courses, setCourses] = useState<AppContextValue['courses']>([]);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
-  const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
+  const [userSettings, setUserSettings] = useState<AppContextValue['userSettings']>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [agentJobs, setAgentJobs] = useState<AgentJob[]>([]);
@@ -148,7 +126,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setAgentJobs(prev => prev.filter(j => j.id !== id));
   }, []);
 
-  // Realtime subscription for agent job status updates (secondary — HTTP is primary)
   useEffect(() => {
     if (!user || user.id === 'guest') {
       if (realtimeChannelRef.current) {
@@ -179,7 +156,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       )
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR') {
-          // Disconnected — fall back to a single poll for any running jobs
           setAgentJobs(prev => {
             const runningIds = prev.filter(j => j.status === 'running').map(j => j.id);
             if (runningIds.length === 0) return prev;

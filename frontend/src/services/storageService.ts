@@ -286,11 +286,15 @@ export const StorageService = {
       return;
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('lectures')
       .update({ course_id: courseId })
-      .eq('id', lectureId);
+      .eq('id', lectureId)
+      .eq('user_id', userId)
+      .select('id')
+      .maybeSingle();
 
     if (error) throw new Error(error.message);
+    if (!data) throw new Error('Failed to update lecture — no rows updated');
   },
 };

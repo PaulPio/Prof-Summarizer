@@ -8,7 +8,7 @@ export const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-export const GEMINI_MODEL = 'gemini-2.0-flash';
+export const GEMINI_MODEL = 'gemini-3.0-flash-preview';
 
 export async function callGemini(
     apiKey: string,

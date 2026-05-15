@@ -1,22 +1,42 @@
 # Dependencies
 node_modules/
-frontend/node_modules/
 
 # Build outputs
 dist/
-frontend/dist/
 .vite/
+*.tsbuildinfo
 
-# Environment files
+# Environment & secrets
 .env
 .env.local
 .env.*.local
+.env.keys
+*.pem
 frontend/.env
 frontend/.env.local
 
-# Supabase
+# Supabase (CLI cache; commit config.toml + migrations + functions)
 backend/supabase/.branches/
 backend/supabase/.temp/
+.supabase/
+
+# MCP / deploy scratch payloads (generated; real source is supabase/functions/)
+backend/mcp-payload-*.json
+backend/deploy-*.json
+backend/mcp-*.txt
+backend/scripts/deploy-via-mcp.mjs
+backend/scripts/mcp-deploy-remaining.mjs
+
+# Empty root lockfile (use frontend/package-lock.json)
+/package-lock.json
+
+# Vercel
+.vercel/
+
+# Coding agents (local skills, permissions, caches)
+.claude/
+.cursor/
+.agents/
 
 # IDE
 .idea/
@@ -27,13 +47,18 @@ backend/supabase/.temp/
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
+ehthumbs.db
 
-# Logs
+# Logs & test output
 *.log
 npm-debug.log*
-
-# TypeScript
-*.tsbuildinfo
-
-# Test coverage
 coverage/
+test-results/
+playwright-report/
+blob-report/
+
+# Misc caches
+.cache/
+.turbo/
+.parcel-cache/

@@ -14,7 +14,7 @@ export interface AICallOptions {
   schema?: any;
 }
 
-const GEMINI_DEFAULT_MODEL = 'gemini-2.0-flash';
+const GEMINI_DEFAULT_MODEL = 'gemini-3.0-flash-preview';
 const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 const ANTHROPIC_DEFAULT_MODEL = 'claude-sonnet-4-6';
 const OPENROUTER_DEFAULT_MODEL = 'openai/gpt-4o-mini';

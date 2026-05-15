@@ -7,10 +7,10 @@ import CanvasMaterialBrowser from '../components/CanvasMaterialBrowser';
 import StudyPlannerView from '../components/StudyPlannerView';
 
 const AI_PROVIDERS: { id: AIProvider; label: string; models: string[] }[] = [
-  { id: 'gemini', label: 'Google Gemini', models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro'] },
+  { id: 'gemini', label: 'Google Gemini', models: ['gemini-3.0-flash-preview', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'] },
   { id: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'] },
   { id: 'anthropic', label: 'Anthropic Claude', models: ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-7'] },
-  { id: 'openrouter', label: 'OpenRouter (any model)', models: ['openai/gpt-4o', 'openai/gpt-4o-mini', 'meta-llama/llama-3.3-70b-instruct', 'google/gemini-2.0-flash-001', 'mistralai/mixtral-8x7b-instruct'] },
+  { id: 'openrouter', label: 'OpenRouter (any model)', models: ['openai/gpt-4o', 'openai/gpt-4o-mini', 'meta-llama/llama-3.3-70b-instruct', 'google/gemini-3.0-flash-preview', 'mistralai/mixtral-8x7b-instruct'] },
 ];
 
 const API_KEY_LABELS: Record<AIProvider, string> = {
@@ -36,7 +36,7 @@ const SettingsPage: React.FC = () => {
   const [notionDefaultPageId, setNotionDefaultPageId] = useState('');
 
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('gemini');
-  const [selectedModel, setSelectedModel] = useState('gemini-2.0-flash');
+  const [selectedModel, setSelectedModel] = useState('gemini-3.0-flash-preview');
   const [apiKey, setApiKey] = useState('');
   const [agentToggles, setAgentToggles] = useState({
     agentStudyPlanner: false,

@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
         const aiConfig = user ? await resolveAIConfig(user.id) : {
             provider: 'gemini' as const,
             apiKey: Deno.env.get('GEMINI_API_KEY')!,
-            model: 'gemini-2.0-flash',
+            model: 'gemini-3.0-flash-preview',
         };
 
         const systemInstruction = `You are an expert educator creating a quiz based on a lecture. Generate exactly ${count} multiple-choice questions that test understanding of the key concepts.

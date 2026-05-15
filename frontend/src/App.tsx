@@ -101,8 +101,8 @@ const AppShell: React.FC = () => {
             <span className={`w-1.5 h-1.5 rounded-full ${user.id === 'guest' ? 'bg-amber-500' : 'bg-green-500'}`}></span>
             <span className="truncate max-w-[200px] sm:max-w-none">{user.id === 'guest' ? 'Guest Mode' : user.email}</span>
           </div>
-          <span className="hidden sm:inline">Gemini 2.0 Flash • Study Mode V1.0</span>
-          <span className="sm:hidden">Gemini 2.0 Flash</span>
+          <span className="hidden sm:inline">Gemini 3.0 Flash Preview • Study Mode V1.0</span>
+          <span className="sm:hidden">Gemini 3.0 Flash Preview</span>
         </footer>
       </main>
     </div>

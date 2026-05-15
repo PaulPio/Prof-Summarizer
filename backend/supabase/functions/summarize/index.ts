@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
         const aiConfig = user ? await resolveAIConfig(user.id) : {
             provider: 'gemini' as const,
             apiKey: Deno.env.get('GEMINI_API_KEY')!,
-            model: 'gemini-2.0-flash',
+            model: 'gemini-3.0-flash-preview',
         };
 
         // Build confusion markers instruction

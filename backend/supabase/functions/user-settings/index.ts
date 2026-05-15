@@ -4,6 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') || '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
 };
 
 const encryptableFields: Record<string, string> = {
@@ -78,7 +79,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       hasCompletedOnboarding: row.has_completed_onboarding ?? false,
       aiProvider: row.ai_provider ?? 'gemini',
-      aiModel: row.ai_model ?? 'gemini-2.0-flash',
+      aiModel: row.ai_model ?? 'gemini-3.0-flash-preview',
       hasGeminiKey: !!row.gemini_api_key_enc,
       hasOpenAIKey: !!row.openai_api_key_enc,
       hasAnthropicKey: !!row.anthropic_api_key_enc,

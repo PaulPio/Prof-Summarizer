@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   user_id                  UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   has_completed_onboarding BOOLEAN DEFAULT FALSE,
   ai_provider              TEXT DEFAULT 'gemini',
-  ai_model                 TEXT DEFAULT 'gemini-2.0-flash',
+  ai_model                 TEXT DEFAULT 'gemini-3.0-flash-preview',
   gemini_api_key_enc       TEXT,
   openai_api_key_enc       TEXT,
   anthropic_api_key_enc    TEXT,
