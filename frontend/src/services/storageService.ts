@@ -1,7 +1,8 @@
 import { supabase } from "./supabase";
-import { SavedLecture, Flashcard, QuizQuestion } from "../types";
+import { SavedLecture, Flashcard, QuizQuestion, Course } from "../types";
 
 const LOCAL_STORAGE_KEY = 'prof_summarizer_lectures_guest';
+const LOCAL_COURSES_KEY = 'prof_summarizer_courses_guest';
 
 export const StorageService = {
   getLectures: async (userId: string): Promise<SavedLecture[]> => {
@@ -39,7 +40,8 @@ export const StorageService = {
       flashcards: row.flashcards,
       quizData: row.quiz_data,
       confusionMarkers: row.confusion_markers,
-      files: row.files
+      files: row.files,
+      courseId: row.course_id,
     })) as SavedLecture[];
   },
 
@@ -70,7 +72,8 @@ export const StorageService = {
       flashcards: lectureData.flashcards || [],
       quiz_data: lectureData.quizData || null,
       confusion_markers: lectureData.confusionMarkers || [],
-      files: lectureData.files
+      files: lectureData.files,
+      course_id: lectureData.courseId || null,
     };
 
     const { data, error } = await supabase
@@ -153,5 +156,119 @@ export const StorageService = {
       console.error("Supabase Delete Error:", error);
       throw new Error(error.message);
     }
-  }
+  },
+
+  getCourses: async (userId: string): Promise<Course[]> => {
+    if (userId === 'guest') {
+      try {
+        const stored = localStorage.getItem(LOCAL_COURSES_KEY);
+        return stored ? JSON.parse(stored) : [];
+      } catch {
+        return [];
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('courses')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw new Error(error.message);
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      userId: row.user_id,
+      name: row.name,
+      color: row.color,
+      canvasCourseId: row.canvas_course_id,
+      canvasCourseCode: row.canvas_course_code,
+      createdAt: row.created_at,
+    })) as Course[];
+  },
+
+  saveCourse: async (userId: string, name: string, color: string): Promise<Course> => {
+    if (userId === 'guest') {
+      const course: Course = {
+        id: Math.random().toString(36).substr(2, 9),
+        userId,
+        name,
+        color,
+        createdAt: new Date().toISOString(),
+      };
+      const stored = localStorage.getItem(LOCAL_COURSES_KEY);
+      const courses: Course[] = stored ? JSON.parse(stored) : [];
+      courses.push(course);
+      localStorage.setItem(LOCAL_COURSES_KEY, JSON.stringify(courses));
+      return course;
+    }
+
+    const { data, error } = await supabase
+      .from('courses')
+      .insert([{ user_id: userId, name, color }])
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    return {
+      id: data.id,
+      userId: data.user_id,
+      name: data.name,
+      color: data.color,
+      createdAt: data.created_at,
+    };
+  },
+
+  updateCourse: async (userId: string, courseId: string, updates: Partial<Pick<Course, 'name' | 'color'>>): Promise<void> => {
+    if (userId === 'guest') {
+      const stored = localStorage.getItem(LOCAL_COURSES_KEY);
+      if (stored) {
+        const courses: Course[] = JSON.parse(stored);
+        const updated = courses.map(c => c.id === courseId ? { ...c, ...updates } : c);
+        localStorage.setItem(LOCAL_COURSES_KEY, JSON.stringify(updated));
+      }
+      return;
+    }
+
+    const { error } = await supabase
+      .from('courses')
+      .update(updates)
+      .eq('id', courseId);
+
+    if (error) throw new Error(error.message);
+  },
+
+  deleteCourse: async (userId: string, courseId: string): Promise<void> => {
+    if (userId === 'guest') {
+      const stored = localStorage.getItem(LOCAL_COURSES_KEY);
+      if (stored) {
+        const courses: Course[] = JSON.parse(stored);
+        localStorage.setItem(LOCAL_COURSES_KEY, JSON.stringify(courses.filter(c => c.id !== courseId)));
+      }
+      return;
+    }
+
+    const { error } = await supabase.from('courses').delete().eq('id', courseId);
+    if (error) throw new Error(error.message);
+  },
+
+  updateLectureCourse: async (lectureId: string, userId: string, courseId: string | null): Promise<void> => {
+    if (userId === 'guest') {
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (stored) {
+        const lectures: SavedLecture[] = JSON.parse(stored);
+        const updated = lectures.map(l => l.id === lectureId ? { ...l, courseId: courseId ?? undefined } : l);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+      }
+      return;
+    }
+
+    const { error } = await supabase
+      .from('lectures')
+      .update({ course_id: courseId })
+      .eq('id', lectureId);
+
+    if (error) throw new Error(error.message);
+  },
 };

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User, SavedLecture } from '../types';
+import { User, SavedLecture, Course } from '../types';
 import { supabase } from '../services/supabase';
 import { StorageService } from '../services/storageService';
 
@@ -11,6 +11,11 @@ interface AppContextValue {
   isLoadingLectures: boolean;
   fetchLectures: () => Promise<void>;
   deleteLecture: (id: string) => Promise<void>;
+  courses: Course[];
+  setCourses: React.Dispatch<React.SetStateAction<Course[]>>;
+  fetchCourses: () => Promise<void>;
+  activeCourseId: string | null;
+  setActiveCourseId: React.Dispatch<React.SetStateAction<string | null>>;
   isSidebarOpen: boolean;
   setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isInitialLoading: boolean;
@@ -22,6 +27,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [lectures, setLectures] = useState<SavedLecture[]>([]);
   const [isLoadingLectures, setIsLoadingLectures] = useState(false);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
@@ -98,6 +105,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setLectures(prev => prev.filter(l => l.id !== id));
   }, [user]);
 
+  const fetchCourses = useCallback(async () => {
+    if (!user) { setCourses([]); return; }
+    try {
+      const data = await StorageService.getCourses(user.id);
+      setCourses(data);
+    } catch (err) {
+      console.error('Failed to fetch courses:', err);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchCourses();
+  }, [fetchCourses]);
+
   return (
     <AppContext.Provider value={{
       user, setUser,
@@ -105,6 +126,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       isLoadingLectures,
       fetchLectures,
       deleteLecture,
+      courses, setCourses,
+      fetchCourses,
+      activeCourseId, setActiveCourseId,
       isSidebarOpen, setIsSidebarOpen,
       isInitialLoading,
     }}>

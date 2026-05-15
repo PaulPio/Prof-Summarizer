@@ -1,4 +1,14 @@
 
+export interface Course {
+  id: string;
+  userId: string;
+  name: string;
+  color: string;
+  canvasCourseId?: string;
+  canvasCourseCode?: string;
+  createdAt: string;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -70,6 +80,7 @@ export interface SavedLecture {
   quizData?: QuizQuestion[];
   confusionMarkers?: number[];
   files?: { name: string; mimeType: string }[];
+  courseId?: string;
 }
 
 export enum AppState {

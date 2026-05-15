@@ -8,7 +8,7 @@ import ConfusionButton from '../components/ConfusionButton';
 
 const RecordPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, setLectures } = useAppContext();
+  const { user, setLectures, courses } = useAppContext();
 
   const [status, setStatus] = useState<AppState>(AppState.IDLE);
   const [errorMessage, setErrorMessage] = useState('');
@@ -17,6 +17,7 @@ const RecordPage: React.FC = () => {
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [confusionMarkers, setConfusionMarkers] = useState<number[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>('');
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -186,6 +187,7 @@ const RecordPage: React.FC = () => {
             cornellNotes,
             confusionMarkers,
             files: uploadedFiles.map(f => ({ name: f.name, mimeType: f.mimeType })),
+            courseId: selectedCourseId || undefined,
           };
 
           const savedId = await StorageService.saveLecture(newLecture);
@@ -263,6 +265,16 @@ const RecordPage: React.FC = () => {
               Duration: {formatTime(recordingTime)}
               {confusionMarkers.length > 0 && ` • ${confusionMarkers.length} confusion marker${confusionMarkers.length > 1 ? 's' : ''}`}
             </p>
+            {courses.length > 0 && (
+              <select
+                value={selectedCourseId}
+                onChange={e => setSelectedCourseId(e.target.value)}
+                className="mt-2 text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="">No course</option>
+                {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            )}
           </div>
           <div className="bg-white border-2 border-dashed border-gray-200 rounded-[24px] sm:rounded-[40px] p-6 sm:p-12 text-center hover:border-blue-400 group shadow-xl">
             <input type="file" ref={fileInputRef} onChange={onFileChange} multiple accept="image/*,application/pdf" className="hidden" />
