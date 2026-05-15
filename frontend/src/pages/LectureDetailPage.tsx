@@ -7,16 +7,18 @@ import SummaryDisplay from '../components/SummaryDisplay';
 import CornellNotesDisplay from '../components/CornellNotesDisplay';
 import StudyModePanel from '../components/StudyModePanel';
 import ChatWindow from '../components/ChatWindow';
+import NotionExportModal from '../components/NotionExportModal';
 
 const LectureDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, lectures, setLectures, courses } = useAppContext();
+  const { user, lectures, setLectures, courses, userSettings } = useAppContext();
 
   const lecture = lectures.find(l => l.id === id);
 
   const [showCornellNotes, setShowCornellNotes] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [showNotionExport, setShowNotionExport] = useState(false);
 
   if (!lecture) {
     return (
@@ -54,16 +56,24 @@ const LectureDetailPage: React.FC = () => {
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-12">
       <div className="max-w-4xl mx-auto pb-24 px-2 sm:px-0 space-y-8">
-        {lecture.courseId && (() => {
-          const course = courses.find(c => c.id === lecture.courseId);
-          return course ? (
-            <div className="flex items-center">
+        <div className="flex items-center justify-between">
+          {lecture.courseId && (() => {
+            const course = courses.find(c => c.id === lecture.courseId);
+            return course ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-white" style={{ backgroundColor: course.color }}>
                 {course.name}
               </span>
-            </div>
-          ) : null;
-        })()}
+            ) : <span />;
+          })()}
+          {userSettings?.hasNotionToken && (
+            <button
+              onClick={() => setShowNotionExport(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-colors"
+            >
+              <span>📓</span> Export to Notion
+            </button>
+          )}
+        </div>
         {lecture.cornellNotes && (
           <div className="flex items-center justify-center gap-2 bg-gray-100 rounded-full p-1 w-fit mx-auto">
             <button onClick={() => setShowCornellNotes(true)} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${showCornellNotes ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
@@ -118,6 +128,10 @@ const LectureDetailPage: React.FC = () => {
       </button>
 
       <ChatWindow transcript={lecture.transcript} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+
+      {showNotionExport && (
+        <NotionExportModal lecture={lecture} onClose={() => setShowNotionExport(false)} />
+      )}
     </div>
   );
 };
