@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User, SavedLecture, Course } from '../types';
+import { User, SavedLecture, Course, UserSettings } from '../types';
 import { supabase } from '../services/supabase';
 import { StorageService } from '../services/storageService';
+import { SettingsService } from '../services/settingsService';
 
 interface AppContextValue {
   user: User | null;
@@ -16,6 +17,8 @@ interface AppContextValue {
   fetchCourses: () => Promise<void>;
   activeCourseId: string | null;
   setActiveCourseId: React.Dispatch<React.SetStateAction<string | null>>;
+  userSettings: UserSettings | null;
+  setUserSettings: React.Dispatch<React.SetStateAction<UserSettings | null>>;
   isSidebarOpen: boolean;
   setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isInitialLoading: boolean;
@@ -29,6 +32,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingLectures, setIsLoadingLectures] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
+  const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
@@ -116,6 +120,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   useEffect(() => {
+    if (!user || user.id === 'guest') { setUserSettings(null); return; }
+    SettingsService.getSettings()
+      .then(setUserSettings)
+      .catch(err => console.error('Failed to load settings:', err));
+  }, [user]);
+
+  useEffect(() => {
     fetchCourses();
   }, [fetchCourses]);
 
@@ -129,6 +140,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       courses, setCourses,
       fetchCourses,
       activeCourseId, setActiveCourseId,
+      userSettings, setUserSettings,
       isSidebarOpen, setIsSidebarOpen,
       isInitialLoading,
     }}>

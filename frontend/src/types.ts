@@ -83,6 +83,39 @@ export interface SavedLecture {
   courseId?: string;
 }
 
+export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'openrouter';
+
+export interface PipelineStep {
+  action: string;
+  enabled: boolean;
+}
+
+export interface UserSettings {
+  hasCompletedOnboarding: boolean;
+  aiProvider: AIProvider;
+  aiModel: string;
+  hasGeminiKey: boolean;
+  hasOpenAIKey: boolean;
+  hasAnthropicKey: boolean;
+  hasOpenRouterKey: boolean;
+  canvasInstanceUrl?: string;
+  hasCanvasToken: boolean;
+  hasNotionToken: boolean;
+  notionDefaultPageId?: string;
+  agentStudyPlanner: boolean;
+  agentAutoOrganizer: boolean;
+  agentResearch: boolean;
+  agentMultiStep: boolean;
+  agentPipelineConfig: PipelineStep[];
+  updatedAt: string;
+}
+
+export interface ApiError {
+  error: string;
+  code: string;
+  details?: object;
+}
+
 export enum AppState {
   IDLE = 'IDLE',
   RECORDING = 'RECORDING',

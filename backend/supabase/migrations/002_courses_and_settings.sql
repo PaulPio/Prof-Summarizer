@@ -107,3 +107,20 @@ CREATE TABLE IF NOT EXISTS ai_call_log (
   cost_usd      NUMERIC(10,6),
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Helper functions for API key encryption/decryption (service-role only)
+CREATE OR REPLACE FUNCTION encrypt_api_key(plain_value TEXT, encryption_key TEXT)
+RETURNS TEXT
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  SELECT encode(pgp_sym_encrypt(plain_value, encryption_key)::bytea, 'base64');
+$$;
+
+CREATE OR REPLACE FUNCTION decrypt_api_key(encrypted_value TEXT, encryption_key TEXT)
+RETURNS TEXT
+LANGUAGE sql
+SECURITY DEFINER
+AS $$
+  SELECT pgp_sym_decrypt(decode(encrypted_value, 'base64')::bytea, encryption_key);
+$$;
