@@ -6,10 +6,11 @@ import HistorySidebar from './components/HistorySidebar';
 import RecordPage from './pages/RecordPage';
 import LectureDetailPage from './pages/LectureDetailPage';
 import SettingsPage from './pages/SettingsPage';
+import OnboardingPage from './pages/OnboardingPage';
 import { supabase } from './services/supabase';
 
 const AppShell: React.FC = () => {
-  const { user, setUser, lectures, deleteLecture, isSidebarOpen, setIsSidebarOpen, isInitialLoading } = useAppContext();
+  const { user, setUser, lectures, deleteLecture, isSidebarOpen, setIsSidebarOpen, isInitialLoading, userSettings } = useAppContext();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -28,6 +29,11 @@ const AppShell: React.FC = () => {
   }
 
   if (!user) return <AuthForm onLogin={setUser} />;
+
+  // Redirect new authenticated users to onboarding
+  if (user.id !== 'guest' && userSettings && !userSettings.hasCompletedOnboarding) {
+    return <OnboardingPage />;
+  }
 
   return (
     <div className="flex h-screen bg-gray-50 text-gray-900 overflow-hidden">
