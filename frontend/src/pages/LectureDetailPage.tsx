@@ -1,0 +1,115 @@
+import React, { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Flashcard, QuizQuestion } from '../types';
+import { StorageService } from '../services/storageService';
+import { useAppContext } from '../context/AppContext';
+import SummaryDisplay from '../components/SummaryDisplay';
+import CornellNotesDisplay from '../components/CornellNotesDisplay';
+import StudyModePanel from '../components/StudyModePanel';
+import ChatWindow from '../components/ChatWindow';
+
+const LectureDetailPage: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { user, lectures, setLectures } = useAppContext();
+
+  const lecture = lectures.find(l => l.id === id);
+
+  const [showCornellNotes, setShowCornellNotes] = useState(true);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
+  if (!lecture) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-gray-500">Lecture not found.</p>
+          <button onClick={() => navigate('/')} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm">Back Home</button>
+        </div>
+      </div>
+    );
+  }
+
+  const handleFlashcardsGenerated = async (flashcards: Flashcard[]) => {
+    if (!user) return;
+    const updated = { ...lecture, flashcards };
+    setLectures(prev => prev.map(l => l.id === lecture.id ? updated : l));
+    try {
+      await StorageService.updateLectureFlashcards(lecture.id, user.id, flashcards);
+    } catch (err) {
+      console.error('Failed to save flashcards:', err);
+    }
+  };
+
+  const handleQuizGenerated = async (quizData: QuizQuestion[]) => {
+    if (!user) return;
+    const updated = { ...lecture, quizData };
+    setLectures(prev => prev.map(l => l.id === lecture.id ? updated : l));
+    try {
+      await StorageService.updateLectureQuiz(lecture.id, user.id, quizData);
+    } catch (err) {
+      console.error('Failed to save quiz data:', err);
+    }
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-12">
+      <div className="max-w-4xl mx-auto pb-24 px-2 sm:px-0 space-y-8">
+        {lecture.cornellNotes && (
+          <div className="flex items-center justify-center gap-2 bg-gray-100 rounded-full p-1 w-fit mx-auto">
+            <button onClick={() => setShowCornellNotes(true)} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${showCornellNotes ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+              📋 Cornell Notes
+            </button>
+            <button onClick={() => setShowCornellNotes(false)} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${!showCornellNotes ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+              📝 Classic Summary
+            </button>
+          </div>
+        )}
+
+        {showCornellNotes && lecture.cornellNotes ? (
+          <CornellNotesDisplay notes={lecture.cornellNotes} title={lecture.title} />
+        ) : (
+          <SummaryDisplay summary={lecture.summary} title={lecture.title} />
+        )}
+
+        <StudyModePanel
+          transcript={lecture.transcript}
+          lectureId={lecture.id}
+          initialFlashcards={lecture.flashcards}
+          initialQuizData={lecture.quizData}
+          onFlashcardsGenerated={handleFlashcardsGenerated}
+          onQuizGenerated={handleQuizGenerated}
+        />
+
+        <div className="mt-10 sm:mt-16 pt-10 sm:pt-16 border-t border-gray-100">
+          <details className="group">
+            <summary className="flex items-center justify-between cursor-pointer list-none p-4 sm:p-6 bg-white rounded-[20px] sm:rounded-[32px] border shadow-sm hover:bg-gray-50 transition-all">
+              <span className="font-black text-gray-800 text-sm sm:text-base">Review Full Transcript Archive</span>
+              <span className="group-open:rotate-180 transition-transform">▼</span>
+            </summary>
+            <div className="mt-4 sm:mt-6 p-4 sm:p-10 bg-gray-900 text-blue-100 rounded-[20px] sm:rounded-[40px] shadow-2xl font-mono text-xs sm:text-sm leading-relaxed max-h-[400px] sm:max-h-[600px] overflow-y-auto">
+              {lecture.transcript}
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <button
+        onClick={() => setIsChatOpen(true)}
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full shadow-lg shadow-indigo-200 hover:shadow-xl hover:scale-110 transition-all flex items-center justify-center group"
+        title="Ask Professor"
+      >
+        <span className="text-2xl">💬</span>
+        <div className="absolute right-full mr-3 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          <div className="bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-lg">
+            Ask Professor
+            <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-gray-900"></div>
+          </div>
+        </div>
+      </button>
+
+      <ChatWindow transcript={lecture.transcript} isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+    </div>
+  );
+};
+
+export default LectureDetailPage;

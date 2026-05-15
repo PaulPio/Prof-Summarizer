@@ -14,7 +14,8 @@ export async function callGemini(
     apiKey: string,
     systemInstruction: string,
     contents: any,
-    responseSchema?: any
+    responseSchema?: any,
+    maxOutputTokens?: number
 ): Promise<string> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
@@ -27,6 +28,10 @@ export async function callGemini(
     if (responseSchema) {
         body.generationConfig.responseMimeType = 'application/json';
         body.generationConfig.responseSchema = responseSchema;
+    }
+
+    if (maxOutputTokens) {
+        body.generationConfig.maxOutputTokens = maxOutputTokens;
     }
 
     const response = await fetch(url, {

@@ -1,15 +1,19 @@
 import { ChatMessage, Flashcard, QuizQuestion, LectureSummary, CornellNotes } from '../types';
+import { supabase } from './supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 
 async function callEdgeFunction<T>(functionName: string, body: any): Promise<T> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token ?? SUPABASE_ANON_KEY;
+
     const response = await fetch(`${FUNCTIONS_URL}/${functionName}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${token}`,
             'apikey': SUPABASE_ANON_KEY,
         },
         body: JSON.stringify(body),
@@ -24,17 +28,11 @@ async function callEdgeFunction<T>(functionName: string, body: any): Promise<T> 
 }
 
 export const API = {
-    /**
-     * Transcribe audio to text
-     */
     transcribe: async (audio: string, mimeType: string): Promise<string> => {
         const result = await callEdgeFunction<{ transcript: string }>('transcribe', { audio, mimeType });
         return result.transcript;
     },
 
-    /**
-     * Summarize lecture with Cornell Notes format
-     */
     summarize: async (
         transcript: string,
         files: { base64: string; mimeType: string }[],
@@ -43,25 +41,16 @@ export const API = {
         return callEdgeFunction('summarize', { transcript, files, confusionMarkers });
     },
 
-    /**
-     * Generate flashcards from transcript
-     */
     generateFlashcards: async (transcript: string): Promise<Flashcard[]> => {
         const result = await callEdgeFunction<{ flashcards: Flashcard[] }>('generate-flashcards', { transcript });
         return result.flashcards;
     },
 
-    /**
-     * Generate quiz questions (configurable count: 5, 10, 15, 20)
-     */
     generateQuiz: async (transcript: string, questionCount: number = 5): Promise<QuizQuestion[]> => {
         const result = await callEdgeFunction<{ questions: QuizQuestion[] }>('generate-quiz', { transcript, questionCount });
         return result.questions;
     },
 
-    /**
-     * Chat with professor about the lecture
-     */
     chat: async (transcript: string, messages: ChatMessage[]): Promise<string> => {
         const result = await callEdgeFunction<{ reply: string }>('chat', { transcript, messages });
         return result.reply;
