@@ -21,6 +21,7 @@ const plainFields: Record<string, string> = {
   aiProvider: 'ai_provider',
   aiModel: 'ai_model',
   canvasInstanceUrl: 'canvas_instance_url',
+  canvasUserName: 'canvas_user_name',
   notionDefaultPageId: 'notion_default_page_id',
   agentStudyPlanner: 'agent_study_planner',
   agentAutoOrganizer: 'agent_auto_organizer',
@@ -28,6 +29,10 @@ const plainFields: Record<string, string> = {
   agentMultiStep: 'agent_multi_step',
   agentPipelineConfig: 'agent_pipeline_config',
 };
+
+function hasNotionConnection(row: Record<string, unknown>): boolean {
+  return !!(row.notion_oauth_access_enc || row.notion_token_enc);
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -71,11 +76,11 @@ Deno.serve(async (req) => {
     }
 
     if (!data) {
-      // Auto-create default row
       await adminClient.from('user_settings').insert([{ user_id: user.id }]);
     }
 
     const row = data || {};
+    const notionConnected = hasNotionConnection(row);
     return new Response(JSON.stringify({
       hasCompletedOnboarding: row.has_completed_onboarding ?? false,
       aiProvider: row.ai_provider ?? 'gemini',
@@ -86,7 +91,11 @@ Deno.serve(async (req) => {
       hasOpenRouterKey: !!row.openrouter_api_key_enc,
       canvasInstanceUrl: row.canvas_instance_url ?? undefined,
       hasCanvasToken: !!row.canvas_api_token_enc,
-      hasNotionToken: !!row.notion_token_enc,
+      canvasUserName: row.canvas_user_name ?? undefined,
+      hasNotionToken: notionConnected,
+      hasNotionConnection: notionConnected,
+      notionWorkspaceName: row.notion_workspace_name ?? undefined,
+      notionConnectedAt: row.notion_connected_at ?? undefined,
       notionDefaultPageId: row.notion_default_page_id ?? undefined,
       agentStudyPlanner: row.agent_study_planner ?? false,
       agentAutoOrganizer: row.agent_auto_organizer ?? false,
@@ -101,7 +110,21 @@ Deno.serve(async (req) => {
 
   if (req.method === 'PUT') {
     const body = await req.json();
-    const dbUpdate: Record<string, any> = {};
+    const dbUpdate: Record<string, unknown> = {};
+
+    if (body.disconnectNotion === true) {
+      dbUpdate.notion_oauth_access_enc = null;
+      dbUpdate.notion_oauth_refresh_enc = null;
+      dbUpdate.notion_token_enc = null;
+      dbUpdate.notion_workspace_id = null;
+      dbUpdate.notion_workspace_name = null;
+      dbUpdate.notion_connected_at = null;
+    }
+
+    if (body.disconnectCanvas === true) {
+      dbUpdate.canvas_api_token_enc = null;
+      dbUpdate.canvas_user_name = null;
+    }
 
     for (const [camel, col] of Object.entries(plainFields)) {
       if (camel in body) {

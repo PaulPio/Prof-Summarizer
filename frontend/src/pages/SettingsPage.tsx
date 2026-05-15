@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { AIProvider, UserSettings } from '../types';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AIProvider } from '../types';
 import { SettingsService } from '../services/settingsService';
 import { useAppContext } from '../context/AppContext';
 import CanvasMaterialBrowser from '../components/CanvasMaterialBrowser';
+import CanvasConnectPanel from '../components/CanvasConnectPanel';
+import NotionConnectPanel from '../components/NotionConnectPanel';
 import StudyPlannerView from '../components/StudyPlannerView';
 
 const AI_PROVIDERS: { id: AIProvider; label: string; models: string[] }[] = [
@@ -24,16 +26,13 @@ type Tab = 'ai' | 'canvas' | 'notion' | 'agents';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, userSettings, setUserSettings } = useAppContext();
   const [activeTab, setActiveTab] = useState<Tab>('ai');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showCanvasBrowser, setShowCanvasBrowser] = useState(false);
-  const [canvasInstanceUrl, setCanvasInstanceUrl] = useState('');
-  const [canvasToken, setCanvasToken] = useState('');
-  const [notionToken, setNotionToken] = useState('');
-  const [notionDefaultPageId, setNotionDefaultPageId] = useState('');
 
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('gemini');
   const [selectedModel, setSelectedModel] = useState('gemini-3.0-flash-preview');
@@ -49,8 +48,6 @@ const SettingsPage: React.FC = () => {
     if (userSettings) {
       setSelectedProvider(userSettings.aiProvider);
       setSelectedModel(userSettings.aiModel);
-      setCanvasInstanceUrl(userSettings.canvasInstanceUrl || '');
-      setNotionDefaultPageId(userSettings.notionDefaultPageId || '');
       setAgentToggles({
         agentStudyPlanner: userSettings.agentStudyPlanner,
         agentAutoOrganizer: userSettings.agentAutoOrganizer,
@@ -59,6 +56,28 @@ const SettingsPage: React.FC = () => {
       });
     }
   }, [userSettings]);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'canvas' || tab === 'notion' || tab === 'ai' || tab === 'agents') {
+      setActiveTab(tab);
+    }
+    const notionStatus = searchParams.get('notion');
+    if (notionStatus === 'connected') {
+      setSaveSuccess(true);
+      SettingsService.getSettings().then(setUserSettings).catch(() => {});
+      const next = new URLSearchParams(searchParams);
+      next.delete('notion');
+      next.delete('message');
+      setSearchParams(next, { replace: true });
+    } else if (notionStatus === 'error') {
+      setSaveError('Notion connection failed. Please try again.');
+      const next = new URLSearchParams(searchParams);
+      next.delete('notion');
+      next.delete('message');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams, setUserSettings]);
 
   if (user?.id === 'guest') {
     return (
@@ -108,46 +127,6 @@ const SettingsPage: React.FC = () => {
       const updated = await SettingsService.getSettings();
       setUserSettings(updated);
       setApiKey('');
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err: any) {
-      setSaveError(err.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSaveCanvas = async () => {
-    setIsSaving(true);
-    setSaveError('');
-    setSaveSuccess(false);
-    try {
-      const patch: Record<string, any> = { canvasInstanceUrl };
-      if (canvasToken.trim()) patch['canvasApiToken'] = canvasToken.trim();
-      await SettingsService.updateSettings(patch);
-      const updated = await SettingsService.getSettings();
-      setUserSettings(updated);
-      setCanvasToken('');
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err: any) {
-      setSaveError(err.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSaveNotion = async () => {
-    setIsSaving(true);
-    setSaveError('');
-    setSaveSuccess(false);
-    try {
-      const patch: Record<string, any> = { notionDefaultPageId };
-      if (notionToken.trim()) patch['notionToken'] = notionToken.trim();
-      await SettingsService.updateSettings(patch);
-      const updated = await SettingsService.getSettings();
-      setUserSettings(updated);
-      setNotionToken('');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err: any) {
@@ -262,90 +241,21 @@ const SettingsPage: React.FC = () => {
         {activeTab === 'canvas' && (
           <div className="bg-white rounded-2xl border shadow-sm p-6 space-y-6">
             <h2 className="text-lg font-black text-gray-900">Canvas LMS</h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">Canvas Instance URL</label>
-                <input
-                  type="url"
-                  value={canvasInstanceUrl}
-                  onChange={e => setCanvasInstanceUrl(e.target.value)}
-                  placeholder="https://canvas.youruniversity.edu"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">
-                  API Token {userSettings?.hasCanvasToken && <span className="normal-case font-normal text-green-600">(token saved)</span>}
-                </label>
-                <input
-                  type="password"
-                  value={canvasToken}
-                  onChange={e => setCanvasToken(e.target.value)}
-                  placeholder={userSettings?.hasCanvasToken ? 'Enter new token to replace…' : 'Paste your Canvas API token…'}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                />
-                <p className="text-xs text-gray-400 mt-1">Get your token from Canvas → Account → Settings → Approved Integrations → New Access Token.</p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleSaveCanvas}
-                disabled={isSaving}
-                className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {isSaving ? 'Saving…' : 'Save Canvas Settings'}
-              </button>
-              {userSettings?.hasCanvasToken && (
-                <button
-                  onClick={() => setShowCanvasBrowser(true)}
-                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors"
-                >
-                  Browse Materials
-                </button>
-              )}
-            </div>
+            <CanvasConnectPanel
+              userSettings={userSettings}
+              onSettingsChange={setUserSettings}
+              onBrowseMaterials={() => setShowCanvasBrowser(true)}
+            />
           </div>
         )}
 
         {activeTab === 'notion' && (
           <div className="bg-white rounded-2xl border shadow-sm p-6 space-y-6">
             <h2 className="text-lg font-black text-gray-900">Notion Integration</h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">
-                  Integration Token {userSettings?.hasNotionToken && <span className="normal-case font-normal text-green-600">(token saved)</span>}
-                </label>
-                <input
-                  type="password"
-                  value={notionToken}
-                  onChange={e => setNotionToken(e.target.value)}
-                  placeholder={userSettings?.hasNotionToken ? 'Enter new token to replace…' : 'Paste your Notion integration token…'}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                />
-                <p className="text-xs text-gray-400 mt-1">Get your token from notion.so → Settings → My connections → Develop or manage integrations.</p>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">Default Export Page ID</label>
-                <input
-                  type="text"
-                  value={notionDefaultPageId}
-                  onChange={e => setNotionDefaultPageId(e.target.value)}
-                  placeholder="Optional — leave blank to pick on each export"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={handleSaveNotion}
-              disabled={isSaving}
-              className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              {isSaving ? 'Saving…' : 'Save Notion Settings'}
-            </button>
+            <NotionConnectPanel
+              userSettings={userSettings}
+              onSettingsChange={setUserSettings}
+            />
           </div>
         )}
 

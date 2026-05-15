@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { AIProvider } from '../types';
 import { SettingsService } from '../services/settingsService';
 import { useAppContext } from '../context/AppContext';
+import CanvasConnectPanel from '../components/CanvasConnectPanel';
+import NotionConnectPanel from '../components/NotionConnectPanel';
 
 const TOTAL_STEPS = 4;
 
@@ -15,7 +17,7 @@ const AI_PROVIDERS: { id: AIProvider; label: string; desc: string }[] = [
 
 const OnboardingPage: React.FC = () => {
   const navigate = useNavigate();
-  const { setUserSettings } = useAppContext();
+  const { userSettings, setUserSettings } = useAppContext();
   const [step, setStep] = useState(1);
   const [isFinishing, setIsFinishing] = useState(false);
 
@@ -119,10 +121,11 @@ const OnboardingPage: React.FC = () => {
                 <h2 className="text-xl font-black text-gray-900">Canvas LMS</h2>
                 <p className="text-sm text-gray-500 mt-1">Connect your Canvas account to import course materials. You can skip this and set it up later in Settings.</p>
               </div>
-              <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 text-center">
-                <p className="text-3xl mb-3">🎓</p>
-                <p className="text-sm text-gray-600">Canvas integration can be configured in <strong>Settings → Canvas</strong> after setup. You'll need your Canvas instance URL and API token.</p>
-              </div>
+              <CanvasConnectPanel
+                userSettings={userSettings}
+                onSettingsChange={setUserSettings}
+                compact
+              />
             </div>
           )}
 
@@ -164,10 +167,11 @@ const OnboardingPage: React.FC = () => {
                 <h2 className="text-xl font-black text-gray-900">Notion Export</h2>
                 <p className="text-sm text-gray-500 mt-1">Connect Notion to export Cornell notes, flashcards, and summaries. Skip to set it up later.</p>
               </div>
-              <div className="p-6 bg-purple-50 rounded-2xl border border-purple-100 text-center">
-                <p className="text-3xl mb-3">📓</p>
-                <p className="text-sm text-gray-600">Notion integration can be configured in <strong>Settings → Notion</strong> after setup. You'll need a Notion integration token.</p>
-              </div>
+              <NotionConnectPanel
+                userSettings={userSettings}
+                onSettingsChange={setUserSettings}
+                compact
+              />
               <div className="p-4 bg-green-50 rounded-xl border border-green-100">
                 <p className="text-sm font-bold text-green-800 mb-1">You're all set!</p>
                 <p className="text-xs text-green-700">Your preferences have been saved. You can change everything anytime in Settings.</p>

@@ -191,7 +191,7 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ lectures, onSelect, onD
                 <div
                   key={course.id}
                   className={`rounded-lg transition-colors ${isDropTarget ? 'ring-2 ring-offset-1 bg-gray-50' : ''}`}
-                  style={isDropTarget ? { ringColor: course.color } : undefined}
+                  style={isDropTarget ? { ['--tw-ring-color' as string]: course.color } : undefined}
                   onDragOver={(e) => handleDragOver(e, course.id)}
                   onDragLeave={() => setDragOverTarget(prev => (prev === course.id ? null : prev))}
                   onDrop={(e) => handleDrop(e, course.id)}

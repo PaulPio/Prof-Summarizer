@@ -100,7 +100,11 @@ export interface UserSettings {
   hasOpenRouterKey: boolean;
   canvasInstanceUrl?: string;
   hasCanvasToken: boolean;
+  canvasUserName?: string;
   hasNotionToken: boolean;
+  hasNotionConnection: boolean;
+  notionWorkspaceName?: string;
+  notionConnectedAt?: string;
   notionDefaultPageId?: string;
   agentStudyPlanner: boolean;
   agentAutoOrganizer: boolean;

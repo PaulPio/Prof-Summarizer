@@ -20,6 +20,7 @@ function isPrivateHost(hostname: string): boolean {
 }
 
 function isAllowedResource(resource: string): boolean {
+  if (resource === 'users/self') return true;
   return ALLOWED_RESOURCES.some(r => resource === r || resource.startsWith(`courses/`) && (resource.endsWith('/modules') || resource.endsWith('/files')));
 }
 
@@ -125,9 +126,15 @@ Deno.serve(async (req) => {
 
     const rawData = await canvasResponse.json();
 
-    // Map to internal shapes based on resource type
     let mapped: any;
-    if (resource === 'courses') {
+    if (resource === 'users/self') {
+      mapped = {
+        id: String(rawData.id),
+        name: rawData.name,
+        shortName: rawData.short_name,
+        email: rawData.email ?? rawData.login_id,
+      };
+    } else if (resource === 'courses') {
       mapped = (Array.isArray(rawData) ? rawData : []).map((c: any) => ({
         id: String(c.id),
         name: c.name,

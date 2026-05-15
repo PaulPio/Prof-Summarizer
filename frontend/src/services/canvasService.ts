@@ -25,6 +25,13 @@ export interface CanvasFile {
   url?: string;
 }
 
+export interface CanvasProfile {
+  id: string;
+  name: string;
+  shortName?: string;
+  email?: string;
+}
+
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token ?? SUPABASE_ANON_KEY;
@@ -45,6 +52,8 @@ async function proxyGet<T>(resource: string): Promise<T> {
 }
 
 export const CanvasService = {
+  getSelf: (): Promise<CanvasProfile> => proxyGet('users/self'),
+
   getCourses: (): Promise<CanvasCourse[]> => proxyGet('courses'),
 
   getCourseModules: (courseId: string): Promise<CanvasModule[]> =>

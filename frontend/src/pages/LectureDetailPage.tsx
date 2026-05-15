@@ -75,7 +75,7 @@ const LectureDetailPage: React.FC = () => {
               </span>
             ) : <span />;
           })()}
-          {userSettings?.hasNotionToken && (
+          {userSettings?.hasNotionConnection && (
             <button
               onClick={() => setShowNotionExport(true)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-colors"

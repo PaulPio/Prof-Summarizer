@@ -26,7 +26,7 @@ export const SettingsService = {
     return response.json();
   },
 
-  updateSettings: async (patch: Partial<UserSettings> & Record<string, any>): Promise<void> => {
+  updateSettings: async (patch: Partial<UserSettings> & Record<string, unknown>): Promise<void> => {
     const headers = await getAuthHeaders();
     const response = await fetch(`${FUNCTIONS_URL}/user-settings`, {
       method: 'PUT',
@@ -37,5 +37,24 @@ export const SettingsService = {
       const err = await response.json();
       throw new Error(err.error || 'Failed to save settings');
     }
+  },
+
+  startNotionOAuth: async (): Promise<string> => {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${FUNCTIONS_URL}/notion-oauth-start`, { headers });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to start Notion connection');
+    }
+    const { authorizeUrl } = await response.json();
+    return authorizeUrl as string;
+  },
+
+  disconnectNotion: async (): Promise<void> => {
+    await SettingsService.updateSettings({ disconnectNotion: true });
+  },
+
+  disconnectCanvas: async (): Promise<void> => {
+    await SettingsService.updateSettings({ disconnectCanvas: true });
   },
 };

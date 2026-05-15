@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { decryptValue, encryptValue, refreshNotionAccessToken } from "../_shared/notion-oauth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') || '*',
@@ -7,7 +8,6 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// Allow-list of Notion API operations (no workspace member or admin endpoints)
 const ALLOWED_NOTION_PATHS: RegExp[] = [
   /^\/v1\/pages(\/[a-z0-9-]+)?$/,
   /^\/v1\/blocks\/[a-z0-9-]+\/children$/,
@@ -17,6 +17,53 @@ const ALLOWED_NOTION_PATHS: RegExp[] = [
 
 function isAllowedPath(path: string): boolean {
   return ALLOWED_NOTION_PATHS.some(re => re.test(path));
+}
+
+type NotionSettings = {
+  notion_oauth_access_enc?: string | null;
+  notion_oauth_refresh_enc?: string | null;
+  notion_token_enc?: string | null;
+};
+
+async function resolveNotionToken(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+  settings: NotionSettings,
+  encryptionKey: string,
+): Promise<string | null> {
+  if (settings.notion_oauth_access_enc) {
+    let access = await decryptValue(adminClient, settings.notion_oauth_access_enc, encryptionKey);
+    if (access) return access;
+
+    if (settings.notion_oauth_refresh_enc) {
+      const refresh = await decryptValue(adminClient, settings.notion_oauth_refresh_enc, encryptionKey);
+      const clientId = Deno.env.get('NOTION_CLIENT_ID');
+      const clientSecret = Deno.env.get('NOTION_CLIENT_SECRET');
+      if (refresh && clientId && clientSecret) {
+        const refreshed = await refreshNotionAccessToken(refresh, clientId, clientSecret);
+        if (refreshed?.access_token) {
+          const accessEnc = await encryptValue(adminClient, refreshed.access_token, encryptionKey);
+          const refreshEnc = refreshed.refresh_token
+            ? await encryptValue(adminClient, refreshed.refresh_token, encryptionKey)
+            : settings.notion_oauth_refresh_enc;
+          if (accessEnc) {
+            await adminClient.from('user_settings').update({
+              notion_oauth_access_enc: accessEnc,
+              notion_oauth_refresh_enc: refreshEnc,
+            }).eq('user_id', userId);
+          }
+          return refreshed.access_token;
+        }
+      }
+    }
+    return null;
+  }
+
+  if (settings.notion_token_enc) {
+    return decryptValue(adminClient, settings.notion_token_enc, encryptionKey);
+  }
+
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -57,22 +104,19 @@ Deno.serve(async (req) => {
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
   const { data: settings } = await adminClient
     .from('user_settings')
-    .select('notion_token_enc')
+    .select('notion_oauth_access_enc, notion_oauth_refresh_enc, notion_token_enc')
     .eq('user_id', user.id)
     .single();
 
-  if (!settings?.notion_token_enc) {
+  if (!settings?.notion_oauth_access_enc && !settings?.notion_token_enc) {
     return new Response(JSON.stringify({ error: 'Notion not configured', code: 'NOT_FOUND' }), {
       status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 
-  const { data: notionToken, error: decErr } = await adminClient.rpc('decrypt_api_key', {
-    encrypted_value: settings.notion_token_enc,
-    encryption_key: encryptionKey,
-  });
+  const notionToken = await resolveNotionToken(adminClient, user.id, settings, encryptionKey);
 
-  if (decErr || !notionToken) {
+  if (!notionToken) {
     return new Response(JSON.stringify({ error: 'Failed to decrypt Notion token', code: 'INTERNAL_ERROR' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

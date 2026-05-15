@@ -71,12 +71,24 @@ The app will be available at `http://localhost:5173`
    supabase link --project-ref YOUR_PROJECT_REF
    ```
 
-3. **Set the Gemini API key as a secret**
+3. **Set secrets**
    ```bash
-   supabase secrets set GEMINI_API_KEY=your_api_key_here
+   supabase secrets set GEMINI_API_KEY=your_gemini_api_key
+   supabase secrets set APP_ENCRYPTION_KEY=your_32_char_random_secret
+   supabase secrets set ALLOWED_ORIGIN=http://localhost:3000
    ```
 
-4. **Deploy Edge Functions**
+4. **Notion OAuth (Connect with Notion)**
+   - Create a public integration at https://www.notion.so/my-integrations
+   - Redirect URI: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/notion-oauth-callback`
+   - For local dev also add: `http://127.0.0.1:54321/functions/v1/notion-oauth-callback`
+   ```bash
+   supabase secrets set NOTION_CLIENT_ID=your_notion_client_id
+   supabase secrets set NOTION_CLIENT_SECRET=your_notion_client_secret
+   supabase secrets set NOTION_OAUTH_REDIRECT_URI=https://YOUR_PROJECT_REF.supabase.co/functions/v1/notion-oauth-callback
+   ```
+
+5. **Deploy Edge Functions**
    ```bash
    supabase functions deploy
    ```
@@ -106,7 +118,17 @@ Create `frontend/.env.local`:
 ### Backend (Supabase Secrets)
 ```bash
 supabase secrets set GEMINI_API_KEY=your_gemini_api_key
+supabase secrets set APP_ENCRYPTION_KEY=your_encryption_key
+supabase secrets set ALLOWED_ORIGIN=https://your-frontend-domain.com
+supabase secrets set NOTION_CLIENT_ID=your_notion_oauth_client_id
+supabase secrets set NOTION_CLIENT_SECRET=your_notion_oauth_client_secret
+supabase secrets set NOTION_OAUTH_REDIRECT_URI=https://YOUR_PROJECT_REF.supabase.co/functions/v1/notion-oauth-callback
 ```
+
+### Integrations
+
+- **Notion**: Users click **Connect Notion** in Settings (OAuth). No manual integration token required.
+- **Canvas**: Users enter their school's Canvas URL, open Canvas account settings in a new tab, and paste a personal access token from **Approved Integrations**. This works across universities without per-school OAuth developer keys.
 
 ## 📦 Deployment
 
