@@ -7,10 +7,11 @@ import { useAppContext } from '../context/AppContext';
 import ConfusionButton from '../components/ConfusionButton';
 import CanvasMaterialBrowser from '../components/CanvasMaterialBrowser';
 import { CanvasFile } from '../services/canvasService';
+import { AgentService } from '../services/agentService';
 
 const RecordPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, setLectures, courses, userSettings } = useAppContext();
+  const { user, setLectures, courses, userSettings, addAgentJob, updateAgentJob } = useAppContext();
 
   const [status, setStatus] = useState<AppState>(AppState.IDLE);
   const [errorMessage, setErrorMessage] = useState('');
@@ -210,6 +211,25 @@ const RecordPage: React.FC = () => {
           setUploadedFiles([]);
           setRecordedBlob(null);
           setConfusionMarkers([]);
+
+          // Fire-and-forget agent triggers (non-blocking — navigate immediately)
+          if (user.id !== 'guest') {
+            if (userSettings?.agentAutoOrganizer) {
+              const tempId = `auto-org-${savedId}`;
+              addAgentJob({ id: tempId, user_id: user.id, lecture_id: savedId, agent_type: 'auto_organizer', status: 'running', created_at: new Date().toISOString() });
+              AgentService.triggerAutoOrganizer(savedId)
+                .then(resp => updateAgentJob(resp.jobId ?? tempId, { status: 'completed' }))
+                .catch(() => updateAgentJob(tempId, { status: 'failed' }));
+            }
+            if (userSettings?.agentMultiStep) {
+              const tempId = `pipeline-${savedId}`;
+              addAgentJob({ id: tempId, user_id: user.id, lecture_id: savedId, agent_type: 'pipeline', status: 'running', created_at: new Date().toISOString() });
+              AgentService.triggerPipeline(savedId)
+                .then(resp => updateAgentJob(resp.jobId ?? tempId, { status: 'completed' }))
+                .catch(() => updateAgentJob(tempId, { status: 'failed' }));
+            }
+          }
+
           navigate(`/lecture/${savedId}`);
         } catch (err: any) {
           setErrorMessage(err.message || 'An error occurred during AI processing.');

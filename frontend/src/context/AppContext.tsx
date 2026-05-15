@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User, SavedLecture, Course, UserSettings } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { User, SavedLecture, Course, UserSettings, AgentJob } from '../types';
 import { supabase } from '../services/supabase';
 import { StorageService } from '../services/storageService';
 import { SettingsService } from '../services/settingsService';
@@ -22,6 +22,10 @@ interface AppContextValue {
   isSidebarOpen: boolean;
   setIsSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isInitialLoading: boolean;
+  agentJobs: AgentJob[];
+  addAgentJob: (job: AgentJob) => void;
+  updateAgentJob: (id: string, patch: Partial<AgentJob>) => void;
+  dismissAgentJob: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -35,6 +39,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [agentJobs, setAgentJobs] = useState<AgentJob[]>([]);
+  const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
@@ -130,6 +136,75 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     fetchCourses();
   }, [fetchCourses]);
 
+  const addAgentJob = useCallback((job: AgentJob) => {
+    setAgentJobs(prev => [job, ...prev]);
+  }, []);
+
+  const updateAgentJob = useCallback((id: string, patch: Partial<AgentJob>) => {
+    setAgentJobs(prev => prev.map(j => j.id === id ? { ...j, ...patch } : j));
+  }, []);
+
+  const dismissAgentJob = useCallback((id: string) => {
+    setAgentJobs(prev => prev.filter(j => j.id !== id));
+  }, []);
+
+  // Realtime subscription for agent job status updates (secondary — HTTP is primary)
+  useEffect(() => {
+    if (!user || user.id === 'guest') {
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
+      return;
+    }
+
+    const channel = supabase
+      .channel(`agent_jobs:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'agent_jobs',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as AgentJob;
+          updateAgentJob(updated.id, {
+            status: updated.status,
+            result: updated.result,
+            completed_at: updated.completed_at,
+          });
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          // Disconnected — fall back to a single poll for any running jobs
+          setAgentJobs(prev => {
+            const runningIds = prev.filter(j => j.status === 'running').map(j => j.id);
+            if (runningIds.length === 0) return prev;
+            supabase
+              .from('agent_jobs')
+              .select('*')
+              .in('id', runningIds)
+              .then(({ data }) => {
+                if (data) {
+                  data.forEach(row => updateAgentJob(row.id, { status: row.status, result: row.result, completed_at: row.completed_at }));
+                }
+              });
+            return prev;
+          });
+        }
+      });
+
+    realtimeChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      realtimeChannelRef.current = null;
+    };
+  }, [user, updateAgentJob]);
+
   return (
     <AppContext.Provider value={{
       user, setUser,
@@ -143,6 +218,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       userSettings, setUserSettings,
       isSidebarOpen, setIsSidebarOpen,
       isInitialLoading,
+      agentJobs,
+      addAgentJob,
+      updateAgentJob,
+      dismissAgentJob,
     }}>
       {children}
     </AppContext.Provider>

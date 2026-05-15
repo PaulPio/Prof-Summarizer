@@ -8,6 +8,8 @@ import CornellNotesDisplay from '../components/CornellNotesDisplay';
 import StudyModePanel from '../components/StudyModePanel';
 import ChatWindow from '../components/ChatWindow';
 import NotionExportModal from '../components/NotionExportModal';
+import ResearchPanel from '../components/ResearchPanel';
+import AutoOrganizerSuggestionCard from '../components/AutoOrganizerSuggestionCard';
 
 const LectureDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +21,7 @@ const LectureDetailPage: React.FC = () => {
   const [showCornellNotes, setShowCornellNotes] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [showNotionExport, setShowNotionExport] = useState(false);
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
 
   if (!lecture) {
     return (
@@ -53,6 +56,13 @@ const LectureDetailPage: React.FC = () => {
     }
   };
 
+  const suggestion = (lecture as any).autoOrganizerSuggestions;
+  const showSuggestion =
+    !suggestionDismissed &&
+    !lecture.courseId &&
+    suggestion?.suggestedCourseId &&
+    userSettings?.agentAutoOrganizer;
+
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-12">
       <div className="max-w-4xl mx-auto pb-24 px-2 sm:px-0 space-y-8">
@@ -74,6 +84,16 @@ const LectureDetailPage: React.FC = () => {
             </button>
           )}
         </div>
+
+        {showSuggestion && (
+          <AutoOrganizerSuggestionCard
+            lectureId={lecture.id}
+            suggestion={suggestion}
+            onAccepted={() => setSuggestionDismissed(true)}
+            onDismissed={() => setSuggestionDismissed(true)}
+          />
+        )}
+
         {lecture.cornellNotes && (
           <div className="flex items-center justify-center gap-2 bg-gray-100 rounded-full p-1 w-fit mx-auto">
             <button onClick={() => setShowCornellNotes(true)} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${showCornellNotes ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
@@ -99,6 +119,15 @@ const LectureDetailPage: React.FC = () => {
           onFlashcardsGenerated={handleFlashcardsGenerated}
           onQuizGenerated={handleQuizGenerated}
         />
+
+        {lecture.confusionMarkers && lecture.confusionMarkers.length > 0 && (
+          <div className="p-6 sm:p-8 bg-white rounded-[20px] sm:rounded-[32px] border shadow-sm space-y-4">
+            <ResearchPanel
+              lectureId={lecture.id}
+              confusionMarkers={lecture.confusionMarkers}
+            />
+          </div>
+        )}
 
         <div className="mt-10 sm:mt-16 pt-10 sm:pt-16 border-t border-gray-100">
           <details className="group">

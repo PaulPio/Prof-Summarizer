@@ -3,6 +3,7 @@ import { SavedLecture, Course } from '../types';
 import { StorageService } from '../services/storageService';
 import { useAppContext } from '../context/AppContext';
 import CourseManager from './CourseManager';
+import AgentJobStatusBar from './AgentJobStatusBar';
 
 interface HistorySidebarProps {
   lectures: SavedLecture[];
@@ -82,8 +83,9 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ lectures, onSelect, onD
   );
 
   return (
-    <div className="h-full bg-white border-r overflow-y-auto">
-      <div className="p-4">
+    <div className="h-full bg-white border-r overflow-y-auto flex flex-col">
+      <AgentJobStatusBar />
+      <div className="p-4 flex-1">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
             <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

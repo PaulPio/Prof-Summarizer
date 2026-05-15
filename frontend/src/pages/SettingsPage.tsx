@@ -4,6 +4,7 @@ import { AIProvider, UserSettings } from '../types';
 import { SettingsService } from '../services/settingsService';
 import { useAppContext } from '../context/AppContext';
 import CanvasMaterialBrowser from '../components/CanvasMaterialBrowser';
+import StudyPlannerView from '../components/StudyPlannerView';
 
 const AI_PROVIDERS: { id: AIProvider; label: string; models: string[] }[] = [
   { id: 'gemini', label: 'Google Gemini', models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro'] },
@@ -382,6 +383,12 @@ const SettingsPage: React.FC = () => {
             >
               {isSaving ? 'Saving…' : 'Save Agent Settings'}
             </button>
+
+            {agentToggles.agentStudyPlanner && (
+              <div className="pt-2 border-t border-gray-100">
+                <StudyPlannerView />
+              </div>
+            )}
           </div>
         )}
       </div>

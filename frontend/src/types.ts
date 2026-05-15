@@ -116,6 +116,17 @@ export interface ApiError {
   details?: object;
 }
 
+export interface AgentJob {
+  id: string;
+  user_id: string;
+  lecture_id?: string;
+  agent_type: string;
+  status: 'running' | 'completed' | 'failed';
+  result?: any;
+  created_at: string;
+  completed_at?: string;
+}
+
 export enum AppState {
   IDLE = 'IDLE',
   RECORDING = 'RECORDING',
