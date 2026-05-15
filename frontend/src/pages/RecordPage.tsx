@@ -5,10 +5,12 @@ import { API } from '../services/api';
 import { StorageService } from '../services/storageService';
 import { useAppContext } from '../context/AppContext';
 import ConfusionButton from '../components/ConfusionButton';
+import CanvasMaterialBrowser from '../components/CanvasMaterialBrowser';
+import { CanvasFile } from '../services/canvasService';
 
 const RecordPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, setLectures, courses } = useAppContext();
+  const { user, setLectures, courses, userSettings } = useAppContext();
 
   const [status, setStatus] = useState<AppState>(AppState.IDLE);
   const [errorMessage, setErrorMessage] = useState('');
@@ -18,6 +20,7 @@ const RecordPage: React.FC = () => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [confusionMarkers, setConfusionMarkers] = useState<number[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+  const [showCanvasBrowser, setShowCanvasBrowser] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -160,6 +163,17 @@ const RecordPage: React.FC = () => {
 
   const handleConfusionMark = () => setConfusionMarkers(prev => [...prev, recordingTime]);
 
+  const handleCanvasImport = (canvasFiles: CanvasFile[]) => {
+    const newFiles: LectureFile[] = canvasFiles.map(f => ({
+      id: Math.random().toString(36).substr(2, 9),
+      name: f.name,
+      mimeType: f.mimeType || 'application/octet-stream',
+      base64: '',
+      previewUrl: undefined,
+    }));
+    setUploadedFiles(prev => [...prev, ...newFiles]);
+  };
+
   const finalizeLecture = async () => {
     if (!recordedBlob || !user) return;
 
@@ -296,6 +310,15 @@ const RecordPage: React.FC = () => {
               </div>
             )}
           </div>
+          {userSettings?.hasCanvasToken && (
+            <button
+              onClick={() => setShowCanvasBrowser(true)}
+              className="w-full py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-bold text-gray-700 hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+            >
+              <span>🎓</span> Add Canvas Files
+            </button>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-6">
             <button onClick={() => setStatus(AppState.IDLE)} className="flex-1 py-4 sm:py-5 bg-white text-gray-500 rounded-2xl sm:rounded-3xl font-black border-2 text-sm sm:text-base">Discard</button>
             <button onClick={downloadRecording} className="flex-1 py-4 sm:py-5 bg-gray-100 text-gray-700 rounded-2xl sm:rounded-3xl font-black border-2 border-gray-200 text-sm sm:text-base flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors">
@@ -305,6 +328,14 @@ const RecordPage: React.FC = () => {
             <button onClick={finalizeLecture} disabled={isOptimizing} className={`flex-[2] py-4 sm:py-5 ${isOptimizing ? 'bg-gray-400' : 'bg-blue-600'} text-white rounded-2xl sm:rounded-3xl font-black text-lg sm:text-xl shadow-2xl`}>Save & Summarize</button>
           </div>
         </div>
+      )}
+
+      {showCanvasBrowser && (
+        <CanvasMaterialBrowser
+          onImport={handleCanvasImport}
+          onClose={() => setShowCanvasBrowser(false)}
+          filterCourseId={selectedCourseId || undefined}
+        />
       )}
 
       {(status === AppState.TRANSCRIBING || status === AppState.SUMMARIZING) && (

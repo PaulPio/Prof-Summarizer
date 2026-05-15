@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AIProvider, UserSettings } from '../types';
 import { SettingsService } from '../services/settingsService';
 import { useAppContext } from '../context/AppContext';
+import CanvasMaterialBrowser from '../components/CanvasMaterialBrowser';
 
 const AI_PROVIDERS: { id: AIProvider; label: string; models: string[] }[] = [
   { id: 'gemini', label: 'Google Gemini', models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro'] },
@@ -18,7 +19,7 @@ const API_KEY_LABELS: Record<AIProvider, string> = {
   openrouter: 'OpenRouter API Key',
 };
 
-type Tab = 'ai' | 'agents';
+type Tab = 'ai' | 'canvas' | 'agents';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -27,6 +28,9 @@ const SettingsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showCanvasBrowser, setShowCanvasBrowser] = useState(false);
+  const [canvasInstanceUrl, setCanvasInstanceUrl] = useState('');
+  const [canvasToken, setCanvasToken] = useState('');
 
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('gemini');
   const [selectedModel, setSelectedModel] = useState('gemini-2.0-flash');
@@ -42,6 +46,7 @@ const SettingsPage: React.FC = () => {
     if (userSettings) {
       setSelectedProvider(userSettings.aiProvider);
       setSelectedModel(userSettings.aiModel);
+      setCanvasInstanceUrl(userSettings.canvasInstanceUrl || '');
       setAgentToggles({
         agentStudyPlanner: userSettings.agentStudyPlanner,
         agentAutoOrganizer: userSettings.agentAutoOrganizer,
@@ -108,6 +113,26 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleSaveCanvas = async () => {
+    setIsSaving(true);
+    setSaveError('');
+    setSaveSuccess(false);
+    try {
+      const patch: Record<string, any> = { canvasInstanceUrl };
+      if (canvasToken.trim()) patch['canvasApiToken'] = canvasToken.trim();
+      await SettingsService.updateSettings(patch);
+      const updated = await SettingsService.getSettings();
+      setUserSettings(updated);
+      setCanvasToken('');
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      setSaveError(err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSaveAgents = async () => {
     setIsSaving(true);
     setSaveError('');
@@ -126,7 +151,7 @@ const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-12">
+    <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-12 relative">
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/')} className="p-2 hover:bg-gray-100 rounded-xl text-gray-500 transition-colors">
@@ -137,11 +162,11 @@ const SettingsPage: React.FC = () => {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-          {([['ai', 'AI Provider'], ['agents', 'Agents']] as [Tab, string][]).map(([id, label]) => (
+          {([['ai', 'AI Provider'], ['canvas', 'Canvas'], ['agents', 'Agents']] as [Tab, string][]).map(([id, label]) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-colors ${activeTab === id ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-colors ${activeTab === id ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
             >
               {label}
             </button>
@@ -210,6 +235,56 @@ const SettingsPage: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'canvas' && (
+          <div className="bg-white rounded-2xl border shadow-sm p-6 space-y-6">
+            <h2 className="text-lg font-black text-gray-900">Canvas LMS</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">Canvas Instance URL</label>
+                <input
+                  type="url"
+                  value={canvasInstanceUrl}
+                  onChange={e => setCanvasInstanceUrl(e.target.value)}
+                  placeholder="https://canvas.youruniversity.edu"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">
+                  API Token {userSettings?.hasCanvasToken && <span className="normal-case font-normal text-green-600">(token saved)</span>}
+                </label>
+                <input
+                  type="password"
+                  value={canvasToken}
+                  onChange={e => setCanvasToken(e.target.value)}
+                  placeholder={userSettings?.hasCanvasToken ? 'Enter new token to replace…' : 'Paste your Canvas API token…'}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                />
+                <p className="text-xs text-gray-400 mt-1">Get your token from Canvas → Account → Settings → Approved Integrations → New Access Token.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleSaveCanvas}
+                disabled={isSaving}
+                className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {isSaving ? 'Saving…' : 'Save Canvas Settings'}
+              </button>
+              {userSettings?.hasCanvasToken && (
+                <button
+                  onClick={() => setShowCanvasBrowser(true)}
+                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors"
+                >
+                  Browse Materials
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'agents' && (
           <div className="bg-white rounded-2xl border shadow-sm p-6 space-y-6">
             <h2 className="text-lg font-black text-gray-900">AI Agents</h2>
@@ -247,6 +322,13 @@ const SettingsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {showCanvasBrowser && (
+        <CanvasMaterialBrowser
+          onImport={() => {}}
+          onClose={() => setShowCanvasBrowser(false)}
+        />
+      )}
     </div>
   );
 };

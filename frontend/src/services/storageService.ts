@@ -253,6 +253,28 @@ export const StorageService = {
     if (error) throw new Error(error.message);
   },
 
+  getCanvasMaterials: async (userId: string, courseId?: string) => {
+    if (userId === 'guest') return [];
+    let query = supabase.from('canvas_materials').select('*').eq('user_id', userId);
+    if (courseId) query = query.eq('course_id', courseId);
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data || [];
+  },
+
+  saveCanvasMaterial: async (userId: string, material: { courseId?: string; canvasFileId: string; name: string; mimeType: string; storagePath?: string }) => {
+    if (userId === 'guest') return;
+    const { error } = await supabase.from('canvas_materials').insert([{
+      user_id: userId,
+      course_id: material.courseId || null,
+      canvas_file_id: material.canvasFileId,
+      name: material.name,
+      mime_type: material.mimeType,
+      storage_path: material.storagePath || null,
+    }]);
+    if (error) throw new Error(error.message);
+  },
+
   updateLectureCourse: async (lectureId: string, userId: string, courseId: string | null): Promise<void> => {
     if (userId === 'guest') {
       const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
