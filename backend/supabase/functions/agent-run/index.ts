@@ -106,7 +106,7 @@ Deno.serve(async (req: Request) => {
         result = await runResearchAgent(user.id, lecture_id, adminClient);
         break;
       case 'pipeline':
-        result = await runPipelineAgent(user.id, lecture_id, adminClient, pipeline_config);
+        result = await runPipelineAgent(user.id, lecture_id, adminClient, pipeline_config, token);
         break;
       default:
         await adminClient.from('agent_jobs').update({ status: 'failed', result: { error: 'Unknown agent type' } }).eq('id', jobId);
