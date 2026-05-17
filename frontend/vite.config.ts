@@ -17,7 +17,8 @@ export default defineConfig(({ mode }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
-        }
+          '@shared-list-models': path.resolve(__dirname, '../backend/supabase/functions/_shared/list-models-utils.ts'),
+        },
       },
       test: {
         environment: 'node',

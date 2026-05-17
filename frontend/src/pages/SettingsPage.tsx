@@ -1,18 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AIProvider } from '../types';
+import { AiModelsService, type ModelEntry } from '../services/aiModelsService';
 import { SettingsService } from '../services/settingsService';
 import { useAppContext } from '../context/AppContext';
 import CoursesSetupPanel from '../components/CoursesSetupPanel';
 import NotionConnectPanel from '../components/NotionConnectPanel';
 import StudyPlannerView from '../components/StudyPlannerView';
 
-const AI_PROVIDERS: { id: AIProvider; label: string; models: string[] }[] = [
-  { id: 'gemini', label: 'Google Gemini', models: ['gemini-3.0-flash-preview', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'] },
-  { id: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'] },
-  { id: 'anthropic', label: 'Anthropic Claude', models: ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-7'] },
-  { id: 'openrouter', label: 'OpenRouter (any model)', models: ['openai/gpt-4o', 'openai/gpt-4o-mini', 'meta-llama/llama-3.3-70b-instruct', 'google/gemini-3.0-flash-preview', 'mistralai/mixtral-8x7b-instruct'] },
+const AI_PROVIDERS: { id: AIProvider; label: string }[] = [
+  { id: 'gemini', label: 'Google Gemini' },
+  { id: 'openai', label: 'OpenAI' },
+  { id: 'anthropic', label: 'Anthropic Claude' },
+  { id: 'openrouter', label: 'OpenRouter (many models)' },
 ];
+
+/** Mirrors backend `_shared/ai-provider.ts` default fallbacks where possible */
+const PROVIDER_DEFAULT_MODEL: Record<AIProvider, string> = {
+  gemini: 'gemini-3.0-flash-preview',
+  openai: 'gpt-4o-mini',
+  anthropic: 'claude-sonnet-4-6',
+  openrouter: 'openai/gpt-4o-mini',
+};
+
+const MODEL_SEARCH_THRESHOLD = 25;
+/** Cap DOM `<option>` count for heavy catalogs (narrow with search). */
+const MAX_VISIBLE_SELECT_OPTIONS = 500;
 
 const API_KEY_LABELS: Record<AIProvider, string> = {
   gemini: 'Gemini API Key',
@@ -35,6 +48,16 @@ const SettingsPage: React.FC = () => {
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('gemini');
   const [selectedModel, setSelectedModel] = useState('gemini-3.0-flash-preview');
   const [apiKey, setApiKey] = useState('');
+  const [debouncedApiKey, setDebouncedApiKey] = useState('');
+  const [availableModels, setAvailableModels] = useState<ModelEntry[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsFetchError, setModelsFetchError] = useState('');
+  const [modelsSource, setModelsSource] = useState<'live' | 'fallback' | ''>('');
+  const [modelsCuratedHint, setModelsCuratedHint] = useState(false);
+  const [modelsUpstreamHint, setModelsUpstreamHint] = useState('');
+  const [modelSearch, setModelSearch] = useState('');
+  const [customModelMode, setCustomModelMode] = useState(false);
+  const [reloadModelsNonce, setReloadModelsNonce] = useState(0);
   const [agentToggles, setAgentToggles] = useState({
     agentStudyPlanner: false,
     agentAutoOrganizer: false,
@@ -56,10 +79,80 @@ const SettingsPage: React.FC = () => {
   }, [userSettings]);
 
   useEffect(() => {
+    const t = globalThis.setTimeout(() => setDebouncedApiKey(apiKey.trim()), 400);
+    return () => globalThis.clearTimeout(t);
+  }, [apiKey]);
+
+  useEffect(() => {
+    if (activeTab !== 'ai') return;
+
+    let cancelled = false;
+    setModelsFetchError('');
+    setModelsUpstreamHint('');
+
+    void (async () => {
+      setModelsLoading(true);
+      try {
+        const res = await AiModelsService.listModels(
+          selectedProvider,
+          debouncedApiKey.trim() ? debouncedApiKey : undefined,
+        );
+        if (cancelled) return;
+        setAvailableModels(res.models);
+        setModelsSource(res.source);
+        setModelsCuratedHint(Boolean(res.meta?.curated));
+        setModelsUpstreamHint(res.source === 'fallback' ? (res.meta?.error ?? '') : '');
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setModelsFetchError(err instanceof Error ? err.message : 'Failed to load models');
+          setModelsSource('');
+          setAvailableModels([]);
+        }
+      } finally {
+        if (!cancelled) setModelsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedProvider, debouncedApiKey, reloadModelsNonce]);
+
+  useEffect(() => {
+    if (modelsLoading || !availableModels.length || customModelMode) return;
+
+    const listIds = new Set(availableModels.map((m) => m.id));
+
+    setSelectedModel((prev) => {
+      if (listIds.has(prev)) return prev;
+
+      const saved =
+        userSettings?.aiProvider === selectedProvider
+          ? (userSettings.aiModel || '').trim()
+          : '';
+
+      if (saved) return saved;
+
+      const def = PROVIDER_DEFAULT_MODEL[selectedProvider];
+      if (listIds.has(def)) return def;
+
+      const firstId = availableModels[0]?.id;
+      return firstId ?? prev;
+    });
+  }, [
+    modelsLoading,
+    availableModels,
+    selectedProvider,
+    userSettings?.aiProvider,
+    userSettings?.aiModel,
+    customModelMode,
+  ]);
+
+  useEffect(() => {
     const tab = searchParams.get('tab');
     const mappedTab = tab === 'canvas' ? 'courses' : tab;
     if (mappedTab === 'courses' || mappedTab === 'notion' || mappedTab === 'ai' || mappedTab === 'agents') {
-      setActiveTab(mappedTab as Tab);
+      setActiveTab(mappedTab);
     }
     const notionStatus = searchParams.get('notion');
     if (notionStatus === 'connected') {
@@ -91,7 +184,18 @@ const SettingsPage: React.FC = () => {
     );
   }
 
-  const providerConfig = AI_PROVIDERS.find(p => p.id === selectedProvider);
+  const normalizedSearch = modelSearch.trim().toLowerCase();
+  const filteredModels =
+    normalizedSearch === ''
+      ? availableModels
+      : availableModels.filter((m) => {
+          const hay = `${m.id} ${m.label ?? ''}`.toLowerCase();
+          return hay.includes(normalizedSearch);
+        });
+
+  const selectedInFiltered = filteredModels.some((m) => m.id === selectedModel);
+  const showModelSearch =
+    selectedProvider === 'openrouter' || availableModels.length > MODEL_SEARCH_THRESHOLD;
 
   const hasKeyLabel = (): string => {
     if (!userSettings) return '';
@@ -186,12 +290,18 @@ const SettingsPage: React.FC = () => {
             <h2 className="text-lg font-black text-gray-900">AI Provider</h2>
 
             <div className="space-y-3">
-              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider">Provider</label>
+              <div className="block text-xs font-bold text-gray-600 uppercase tracking-wider">Provider</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {AI_PROVIDERS.map(p => (
                   <button
                     key={p.id}
-                    onClick={() => { setSelectedProvider(p.id); setSelectedModel(p.models[0]); setApiKey(''); }}
+                    type="button"
+                    onClick={() => {
+                      setSelectedProvider(p.id);
+                      setApiKey('');
+                      setModelSearch('');
+                      setCustomModelMode(false);
+                    }}
                     className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${selectedProvider === p.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
                   >
                     <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${selectedProvider === p.id ? 'border-blue-500 bg-blue-500' : 'border-gray-300'}`} />
@@ -202,14 +312,116 @@ const SettingsPage: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider">Model</label>
-              <select
-                value={selectedModel}
-                onChange={e => setSelectedModel(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {providerConfig?.models.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
+              <div className="flex items-center justify-between gap-2">
+                <div className="block text-xs font-bold text-gray-600 uppercase tracking-wider">Model</div>
+                {modelsLoading && (
+                  <span className="text-xs text-gray-400">Loading catalog…</span>
+                )}
+              </div>
+
+              {modelsFetchError && (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-xs">
+                  <span className="flex-1">{modelsFetchError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setReloadModelsNonce(n => n + 1)}
+                    className="px-3 py-1.5 rounded-lg bg-amber-100 font-bold text-amber-900 hover:bg-amber-200"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {!modelsFetchError && modelsSource && (
+                <div className="text-xs text-gray-500 space-y-0.5">
+                  {modelsSource === 'live' && (
+                    <p className="text-green-700 font-medium">
+                      Live catalog ({availableModels.length} models)
+                    </p>
+                  )}
+                  {modelsSource === 'fallback' && (
+                    <p className="text-amber-800">
+                      Showing cached suggestions
+                      {modelsUpstreamHint ? ` — ${modelsUpstreamHint}` : ''}
+                    </p>
+                  )}
+                  {modelsCuratedHint && (
+                    <p>Claude model IDs are curated (Anthropic does not expose a public listing API).</p>
+                  )}
+                  {(selectedProvider === 'gemini' || selectedProvider === 'openai') && !debouncedApiKey && (
+                    <p>
+                      Paste your {API_KEY_LABELS[selectedProvider].replace(' API Key', '')} key above to load the full live model list.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <label htmlFor="settings-custom-model-toggle" className="flex items-center gap-2 text-sm text-gray-700 select-none cursor-pointer">
+                <input
+                  id="settings-custom-model-toggle"
+                  type="checkbox"
+                  className="rounded border-gray-300"
+                  checked={customModelMode}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setCustomModelMode(on);
+                    if (!on) {
+                      const listIds = new Set(availableModels.map((m) => m.id));
+                      setSelectedModel((prev) => {
+                        if (listIds.has(prev)) return prev;
+                        const def = PROVIDER_DEFAULT_MODEL[selectedProvider];
+                        if (listIds.has(def)) return def;
+                        return availableModels[0]?.id ?? prev;
+                      });
+                    }
+                  }}
+                />
+                <span>Enter a custom model ID</span>
+              </label>
+
+              {customModelMode ? (
+                <input
+                  type="text"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  placeholder={selectedProvider === 'openrouter' ? 'e.g. anthropic/claude-3.5-sonnet' : 'Model id'}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                />
+              ) : (
+                <>
+                  {showModelSearch && (
+                    <input
+                      type="search"
+                      value={modelSearch}
+                      onChange={(e) => setModelSearch(e.target.value)}
+                      placeholder="Search models…"
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  )}
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    disabled={modelsLoading || !availableModels.length}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                  >
+                    {!selectedInFiltered && selectedModel.trim() && (
+                      <option value={selectedModel}>
+                        {`${selectedModel} (refine search if you expected a catalog match)`}
+                      </option>
+                    )}
+                    {filteredModels.slice(0, MAX_VISIBLE_SELECT_OPTIONS).map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label ? `${m.label} — ${m.id}` : m.id}
+                      </option>
+                    ))}
+                  </select>
+                  {filteredModels.length > MAX_VISIBLE_SELECT_OPTIONS && (
+                    <p className="text-xs text-gray-400">
+                      Showing first {MAX_VISIBLE_SELECT_OPTIONS} matches — refine search to narrow results.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
 
             <div className="space-y-2">

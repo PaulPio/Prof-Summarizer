@@ -18,7 +18,7 @@ import { homedir } from 'os';
 import { readFile } from 'fs/promises';
 
 const PROJECT_REF = 'sqlwvjbiququbvnqzvub';
-const FUNCTIONS = ['user-settings', 'notion-proxy', 'agent-run'];
+const FUNCTIONS = ['user-settings', 'notion-proxy', 'agent-run', 'list-ai-models'];
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const root = join(__dirname, '..', 'supabase', 'functions');
