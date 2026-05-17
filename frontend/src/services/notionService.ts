@@ -39,14 +39,69 @@ async function appendChildren(pageId: string, blocks: any[]): Promise<void> {
   }
 }
 
+/** Notion rich text segments are capped per text fragment (use a safe margin). */
+const NOTION_CONTENT_MAX = 1900;
+
+function truncateNotionPlainText(text: string): string {
+  const t = (text ?? '').trim();
+  if (t.length <= NOTION_CONTENT_MAX) return t;
+  return `${t.slice(0, NOTION_CONTENT_MAX - 1)}…`;
+}
+
+const plainAnnotations = {
+  bold: false,
+  italic: false,
+  strikethrough: false,
+  underline: false,
+  code: false,
+  color: 'default' as const,
+};
+
+function notionCell(text: string) {
+  return [
+    {
+      type: 'text',
+      text: { content: truncateNotionPlainText(text) },
+      annotations: { ...plainAnnotations },
+    },
+  ];
+}
+
+function notionHeaderCell(content: string) {
+  return [
+    {
+      type: 'text',
+      text: { content: truncateNotionPlainText(content) },
+      annotations: { ...plainAnnotations, bold: true },
+    },
+  ];
+}
+
 export const NotionService = {
   testConnection: async (): Promise<{ name: string }> => {
-    const data = await notionRequest('/v1/search', 'POST', { query: '', filter: { object: 'page' }, page_size: 1 });
+    const data = await notionRequest('/v1/search', 'POST', {
+      query: '',
+      filter: { property: 'object', value: 'page' },
+      page_size: 1,
+    });
     return { name: 'Connected' };
   },
 
+  /** Create an empty Notion page as a direct child of an existing page (same as Add page in Notion’s sidebar API-wise). */
+  createChildPage: async (parentPageId: string, title: string): Promise<NotionExportResult> => {
+    const page = await notionRequest('/v1/pages', 'POST', {
+      parent: { page_id: parentPageId },
+      properties: { title: { title: [{ text: { content: title } }] } },
+    });
+    return { pageId: page.id, pageUrl: page.url };
+  },
+
   getPages: async (): Promise<{ id: string; title: string }[]> => {
-    const data = await notionRequest('/v1/search', 'POST', { query: '', filter: { object: 'page' }, page_size: 20 });
+    const data = await notionRequest('/v1/search', 'POST', {
+      query: '',
+      filter: { property: 'object', value: 'page' },
+      page_size: 100,
+    });
     return (data.results || []).map((p: any) => ({
       id: p.id,
       title: p.properties?.title?.title?.[0]?.plain_text || p.properties?.Name?.title?.[0]?.plain_text || 'Untitled',
@@ -59,34 +114,68 @@ export const NotionService = {
       properties: { title: { title: [{ text: { content: title } }] } },
     });
 
-    // Build Cornell Notes blocks
+    // Cornell layout: cues (left) and notes (right) in one scannable grid, summary below — tables track rows neatly.
+    const rows = Math.max(notes.cues.length, notes.notes.length);
+
+    const tableRows: object[] =
+      rows > 0
+        ? Array.from({ length: rows }, (_, i) => ({
+            object: 'block',
+            type: 'table_row',
+            table_row: {
+              cells: [notionCell(notes.cues[i] ?? ''), notionCell(notes.notes[i] ?? '')],
+            },
+          }))
+        : [
+            {
+              object: 'block',
+              type: 'table_row',
+              table_row: { cells: [notionCell('—'), notionCell('—')] },
+            },
+          ];
+
     const blocks: any[] = [
       { object: 'block', type: 'heading_2', heading_2: { rich_text: [{ text: { content: 'Cornell Notes' } }] } },
-      { object: 'block', type: 'divider', divider: {} },
-    ];
-
-    // Zip cues and notes
-    const rows = Math.max(notes.cues.length, notes.notes.length);
-    for (let i = 0; i < rows; i++) {
-      const cue = notes.cues[i] || '';
-      const note = notes.notes[i] || '';
-      blocks.push({
-        object: 'block', type: 'callout',
-        callout: {
-          icon: { type: 'emoji', emoji: '💡' },
-          rich_text: [{ text: { content: cue } }],
-          color: 'blue_background',
+      {
+        object: 'block',
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [
+            { text: { content: 'Left column — cues / keywords / questions · Right column — supporting notes. Re-read the cues to recall the details.' } },
+          ],
         },
-      });
-      blocks.push({
-        object: 'block', type: 'paragraph',
-        paragraph: { rich_text: [{ text: { content: note } }] },
-      });
-    }
-
-    blocks.push({ object: 'block', type: 'divider', divider: {} });
-    blocks.push({ object: 'block', type: 'heading_3', heading_3: { rich_text: [{ text: { content: 'Summary' } }] } });
-    blocks.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: [{ text: { content: notes.summary } }] } });
+      },
+      {
+        object: 'block',
+        type: 'table',
+        table: { table_width: 2, has_column_header: true, has_row_header: false },
+        children: [
+          {
+            object: 'block',
+            type: 'table_row',
+            table_row: {
+              cells: [notionHeaderCell('Cues & questions'), notionHeaderCell('Notes')],
+            },
+          },
+          ...tableRows,
+        ],
+      },
+      { object: 'block', type: 'divider', divider: {} },
+      { object: 'block', type: 'heading_2', heading_2: { rich_text: [{ text: { content: 'Summary' } }] } },
+      {
+        object: 'block',
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [
+            {
+              text: {
+                content: truncateNotionPlainText((notes.summary ?? '').trim() || '(No summary generated — you can paste one below.)'),
+              },
+            },
+          ],
+        },
+      },
+    ];
 
     await appendChildren(page.id, blocks);
     return { pageId: page.id, pageUrl: page.url };

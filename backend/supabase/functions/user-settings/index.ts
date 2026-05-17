@@ -12,7 +12,6 @@ const encryptableFields: Record<string, string> = {
   openaiApiKey: 'openai_api_key_enc',
   anthropicApiKey: 'anthropic_api_key_enc',
   openrouterApiKey: 'openrouter_api_key_enc',
-  canvasApiToken: 'canvas_api_token_enc',
   notionToken: 'notion_token_enc',
 };
 
@@ -20,8 +19,6 @@ const plainFields: Record<string, string> = {
   hasCompletedOnboarding: 'has_completed_onboarding',
   aiProvider: 'ai_provider',
   aiModel: 'ai_model',
-  canvasInstanceUrl: 'canvas_instance_url',
-  canvasUserName: 'canvas_user_name',
   notionDefaultPageId: 'notion_default_page_id',
   agentStudyPlanner: 'agent_study_planner',
   agentAutoOrganizer: 'agent_auto_organizer',
@@ -89,9 +86,6 @@ Deno.serve(async (req) => {
       hasOpenAIKey: !!row.openai_api_key_enc,
       hasAnthropicKey: !!row.anthropic_api_key_enc,
       hasOpenRouterKey: !!row.openrouter_api_key_enc,
-      canvasInstanceUrl: row.canvas_instance_url ?? undefined,
-      hasCanvasToken: !!row.canvas_api_token_enc,
-      canvasUserName: row.canvas_user_name ?? undefined,
       hasNotionToken: notionConnected,
       hasNotionConnection: notionConnected,
       notionWorkspaceName: row.notion_workspace_name ?? undefined,
@@ -119,11 +113,6 @@ Deno.serve(async (req) => {
       dbUpdate.notion_workspace_id = null;
       dbUpdate.notion_workspace_name = null;
       dbUpdate.notion_connected_at = null;
-    }
-
-    if (body.disconnectCanvas === true) {
-      dbUpdate.canvas_api_token_enc = null;
-      dbUpdate.canvas_user_name = null;
     }
 
     for (const [camel, col] of Object.entries(plainFields)) {

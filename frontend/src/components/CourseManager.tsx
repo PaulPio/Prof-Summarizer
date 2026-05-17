@@ -1,9 +1,5 @@
 import React, { useState } from 'react';
-
-const COLORS = [
-  '#6366f1', '#3b82f6', '#10b981', '#f59e0b',
-  '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6',
-];
+import { COURSE_COLORS } from '../constants/courseColors';
 
 interface CourseManagerProps {
   mode: 'create' | 'edit';
@@ -13,7 +9,7 @@ interface CourseManagerProps {
   onCancel: () => void;
 }
 
-const CourseManager: React.FC<CourseManagerProps> = ({ mode, initialName = '', initialColor = COLORS[0], onSave, onCancel }) => {
+const CourseManager: React.FC<CourseManagerProps> = ({ mode, initialName = '', initialColor = COURSE_COLORS[0], onSave, onCancel }) => {
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState(initialColor);
 
@@ -42,7 +38,7 @@ const CourseManager: React.FC<CourseManagerProps> = ({ mode, initialName = '', i
           <div>
             <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Color</label>
             <div className="flex gap-2 flex-wrap">
-              {COLORS.map(c => (
+              {COURSE_COLORS.map(c => (
                 <button
                   key={c}
                   type="button"

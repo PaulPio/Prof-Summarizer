@@ -82,6 +82,7 @@ The app will be available at `http://localhost:5173`
    - Create a public integration at https://www.notion.so/my-integrations
    - Redirect URI: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/notion-oauth-callback`
    - For local dev also add: `http://127.0.0.1:54321/functions/v1/notion-oauth-callback`
+   - **JWT verification:** The callback URL is opened by Notion’s redirect (no `Authorization` header). This repo disables JWT verification only for `notion-oauth-callback` in [`backend/supabase/config.toml`](backend/supabase/config.toml) (`verify_jwt = false`). Deploy from `backend` so that setting applies (`supabase functions deploy`). If you already deployed with JWT enforced, turn off JWT for `notion-oauth-callback` in Dashboard → Edge Functions, or run `supabase functions deploy notion-oauth-callback --no-verify-jwt`.
    ```bash
    supabase secrets set NOTION_CLIENT_ID=your_notion_client_id
    supabase secrets set NOTION_CLIENT_SECRET=your_notion_client_secret
@@ -128,7 +129,7 @@ supabase secrets set NOTION_OAUTH_REDIRECT_URI=https://YOUR_PROJECT_REF.supabase
 ### Integrations
 
 - **Notion**: Users click **Connect Notion** in Settings (OAuth). No manual integration token required.
-- **Canvas**: Users enter their school's Canvas URL, open Canvas account settings in a new tab, and paste a personal access token from **Approved Integrations**. This works across universities without per-school OAuth developer keys.
+- **Courses**: In **Settings → Courses**, add classes manually (one per line), import from a **calendar file (.ics)** or **schedule PDF** (text-based PDFs work best—scanned images are not parsed yet). Optional **syllabus (.pdf/.doc)** per course uploads to Supabase Storage (private bucket `course-documents`) under each user ID.
 
 ## 📦 Deployment
 

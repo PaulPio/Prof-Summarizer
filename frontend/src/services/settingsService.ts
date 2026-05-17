@@ -53,8 +53,4 @@ export const SettingsService = {
   disconnectNotion: async (): Promise<void> => {
     await SettingsService.updateSettings({ disconnectNotion: true });
   },
-
-  disconnectCanvas: async (): Promise<void> => {
-    await SettingsService.updateSettings({ disconnectCanvas: true });
-  },
 };

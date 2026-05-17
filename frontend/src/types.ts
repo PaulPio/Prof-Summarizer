@@ -4,9 +4,11 @@ export interface Course {
   userId: string;
   name: string;
   color: string;
-  canvasCourseId?: string;
-  canvasCourseCode?: string;
   createdAt: string;
+  syllabusFilePath?: string | null;
+  syllabusFileName?: string | null;
+  syllabusMime?: string | null;
+  syllabusUploadedAt?: string | null;
 }
 
 export interface User {
@@ -98,9 +100,6 @@ export interface UserSettings {
   hasOpenAIKey: boolean;
   hasAnthropicKey: boolean;
   hasOpenRouterKey: boolean;
-  canvasInstanceUrl?: string;
-  hasCanvasToken: boolean;
-  canvasUserName?: string;
   hasNotionToken: boolean;
   hasNotionConnection: boolean;
   notionWorkspaceName?: string;

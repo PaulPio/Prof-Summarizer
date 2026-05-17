@@ -3,8 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AIProvider } from '../types';
 import { SettingsService } from '../services/settingsService';
 import { useAppContext } from '../context/AppContext';
-import CanvasMaterialBrowser from '../components/CanvasMaterialBrowser';
-import CanvasConnectPanel from '../components/CanvasConnectPanel';
+import CoursesSetupPanel from '../components/CoursesSetupPanel';
 import NotionConnectPanel from '../components/NotionConnectPanel';
 import StudyPlannerView from '../components/StudyPlannerView';
 
@@ -22,17 +21,16 @@ const API_KEY_LABELS: Record<AIProvider, string> = {
   openrouter: 'OpenRouter API Key',
 };
 
-type Tab = 'ai' | 'canvas' | 'notion' | 'agents';
+type Tab = 'ai' | 'courses' | 'notion' | 'agents';
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, userSettings, setUserSettings } = useAppContext();
+  const { user, courses, fetchCourses, userSettings, setUserSettings } = useAppContext();
   const [activeTab, setActiveTab] = useState<Tab>('ai');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [showCanvasBrowser, setShowCanvasBrowser] = useState(false);
 
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('gemini');
   const [selectedModel, setSelectedModel] = useState('gemini-3.0-flash-preview');
@@ -59,8 +57,9 @@ const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'canvas' || tab === 'notion' || tab === 'ai' || tab === 'agents') {
-      setActiveTab(tab);
+    const mappedTab = tab === 'canvas' ? 'courses' : tab;
+    if (mappedTab === 'courses' || mappedTab === 'notion' || mappedTab === 'ai' || mappedTab === 'agents') {
+      setActiveTab(mappedTab as Tab);
     }
     const notionStatus = searchParams.get('notion');
     if (notionStatus === 'connected') {
@@ -79,7 +78,7 @@ const SettingsPage: React.FC = () => {
     }
   }, [searchParams, setSearchParams, setUserSettings]);
 
-  if (user?.id === 'guest') {
+  if (!user || user.id === 'guest') {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center space-y-4 max-w-sm px-4">
@@ -163,13 +162,12 @@ const SettingsPage: React.FC = () => {
           <h1 className="text-2xl font-black text-gray-900">Settings</h1>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-          {([['ai', 'AI'], ['canvas', 'Canvas'], ['notion', 'Notion'], ['agents', 'Agents']] as [Tab, string][]).map(([id, label]) => (
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+          {([['ai', 'AI'], ['courses', 'Courses'], ['notion', 'Notion'], ['agents', 'Agents']] as [Tab, string][]).map(([id, label]) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-colors ${activeTab === id ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-colors whitespace-nowrap ${activeTab === id ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
             >
               {label}
             </button>
@@ -238,14 +236,10 @@ const SettingsPage: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'canvas' && (
+        {activeTab === 'courses' && (
           <div className="bg-white rounded-2xl border shadow-sm p-6 space-y-6">
-            <h2 className="text-lg font-black text-gray-900">Canvas LMS</h2>
-            <CanvasConnectPanel
-              userSettings={userSettings}
-              onSettingsChange={setUserSettings}
-              onBrowseMaterials={() => setShowCanvasBrowser(true)}
-            />
+            <h2 className="text-lg font-black text-gray-900">Courses & syllabi</h2>
+            <CoursesSetupPanel userId={user.id} courses={courses} onCoursesChanged={fetchCourses} />
           </div>
         )}
 
@@ -302,13 +296,6 @@ const SettingsPage: React.FC = () => {
           </div>
         )}
       </div>
-
-      {showCanvasBrowser && (
-        <CanvasMaterialBrowser
-          onImport={() => {}}
-          onClose={() => setShowCanvasBrowser(false)}
-        />
-      )}
     </div>
   );
 };

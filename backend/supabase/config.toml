@@ -380,6 +380,10 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# Notion OAuth redirect lands here via GET ?code=&state= — no browser JWT.
+[functions.notion-oauth-callback]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

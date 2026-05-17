@@ -181,9 +181,11 @@ export const StorageService = {
       userId: row.user_id,
       name: row.name,
       color: row.color,
-      canvasCourseId: row.canvas_course_id,
-      canvasCourseCode: row.canvas_course_code,
       createdAt: row.created_at,
+      syllabusFilePath: row.syllabus_file_path ?? undefined,
+      syllabusFileName: row.syllabus_file_name ?? undefined,
+      syllabusMime: row.syllabus_mime ?? undefined,
+      syllabusUploadedAt: row.syllabus_uploaded_at ?? undefined,
     })) as Course[];
   },
 
@@ -217,10 +219,21 @@ export const StorageService = {
       name: data.name,
       color: data.color,
       createdAt: data.created_at,
+      syllabusFilePath: data.syllabus_file_path ?? undefined,
+      syllabusFileName: data.syllabus_file_name ?? undefined,
+      syllabusMime: data.syllabus_mime ?? undefined,
+      syllabusUploadedAt: data.syllabus_uploaded_at ?? undefined,
     };
   },
 
-  updateCourse: async (userId: string, courseId: string, updates: Partial<Pick<Course, 'name' | 'color'>>): Promise<void> => {
+  updateCourse: async (
+    userId: string,
+    courseId: string,
+    updates: Partial<Pick<Course, 'name' | 'color'>> & Partial<Record<
+      'syllabusFilePath' | 'syllabusFileName' | 'syllabusMime' | 'syllabusUploadedAt',
+      string | null | undefined
+    >>,
+  ): Promise<void> => {
     if (userId === 'guest') {
       const stored = localStorage.getItem(LOCAL_COURSES_KEY);
       if (stored) {
@@ -231,10 +244,15 @@ export const StorageService = {
       return;
     }
 
-    const { error } = await supabase
-      .from('courses')
-      .update(updates)
-      .eq('id', courseId);
+    const dbPatch: Record<string, unknown> = {};
+    if (updates.name !== undefined) dbPatch.name = updates.name;
+    if (updates.color !== undefined) dbPatch.color = updates.color;
+    if (updates.syllabusFilePath !== undefined) dbPatch.syllabus_file_path = updates.syllabusFilePath;
+    if (updates.syllabusFileName !== undefined) dbPatch.syllabus_file_name = updates.syllabusFileName;
+    if (updates.syllabusMime !== undefined) dbPatch.syllabus_mime = updates.syllabusMime;
+    if (updates.syllabusUploadedAt !== undefined) dbPatch.syllabus_uploaded_at = updates.syllabusUploadedAt;
+
+    const { error } = await supabase.from('courses').update(dbPatch).eq('id', courseId);
 
     if (error) throw new Error(error.message);
   },
@@ -249,30 +267,52 @@ export const StorageService = {
       return;
     }
 
-    const { error } = await supabase.from('courses').delete().eq('id', courseId);
+    const { data: row } = await supabase
+      .from('courses')
+      .select('syllabus_file_path')
+      .eq('id', courseId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (row?.syllabus_file_path) {
+      await supabase.storage.from('course-documents').remove([row.syllabus_file_path]).catch(() => {});
+    }
+
+    const { error } = await supabase.from('courses').delete().eq('id', courseId).eq('user_id', userId);
     if (error) throw new Error(error.message);
   },
 
-  getCanvasMaterials: async (userId: string, courseId?: string) => {
-    if (userId === 'guest') return [];
-    let query = supabase.from('canvas_materials').select('*').eq('user_id', userId);
-    if (courseId) query = query.eq('course_id', courseId);
-    const { data, error } = await query.order('created_at', { ascending: false });
-    if (error) throw new Error(error.message);
-    return data || [];
+  uploadCourseSyllabus: async (userId: string, course: Course, file: File): Promise<void> => {
+    if (userId === 'guest') throw new Error('Sign in to attach syllabi');
+    const bucket = 'course-documents';
+    const ext = ((file.name.split('.').pop() || 'pdf').replace(/[^a-zA-Z0-9]/g, '') || 'pdf').slice(0, 12);
+    const path = `${userId}/${course.id}/syllabus-${Date.now()}.${ext}`;
+    if (course.syllabusFilePath) {
+      await supabase.storage.from(bucket).remove([course.syllabusFilePath]).catch(() => {});
+    }
+    const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, {
+      upsert: false,
+      contentType: file.type || undefined,
+    });
+    if (upErr) throw new Error(upErr.message);
+
+    await StorageService.updateCourse(userId, course.id, {
+      syllabusFilePath: path,
+      syllabusFileName: file.name,
+      syllabusMime: file.type || 'application/octet-stream',
+      syllabusUploadedAt: new Date().toISOString(),
+    });
   },
 
-  saveCanvasMaterial: async (userId: string, material: { courseId?: string; canvasFileId: string; name: string; mimeType: string; storagePath?: string }) => {
-    if (userId === 'guest') return;
-    const { error } = await supabase.from('canvas_materials').insert([{
-      user_id: userId,
-      course_id: material.courseId || null,
-      canvas_file_id: material.canvasFileId,
-      name: material.name,
-      mime_type: material.mimeType,
-      storage_path: material.storagePath || null,
-    }]);
-    if (error) throw new Error(error.message);
+  removeCourseSyllabus: async (userId: string, course: Course): Promise<void> => {
+    if (userId === 'guest' || !course.syllabusFilePath) return;
+    await supabase.storage.from('course-documents').remove([course.syllabusFilePath]).catch(() => {});
+    await StorageService.updateCourse(userId, course.id, {
+      syllabusFilePath: null,
+      syllabusFileName: null,
+      syllabusMime: null,
+      syllabusUploadedAt: null,
+    });
   },
 
   updateLectureCourse: async (lectureId: string, userId: string, courseId: string | null): Promise<void> => {

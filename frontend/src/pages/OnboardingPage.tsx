@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AIProvider } from '../types';
 import { SettingsService } from '../services/settingsService';
 import { useAppContext } from '../context/AppContext';
-import CanvasConnectPanel from '../components/CanvasConnectPanel';
+import CoursesSetupPanel from '../components/CoursesSetupPanel';
 import NotionConnectPanel from '../components/NotionConnectPanel';
 
 const TOTAL_STEPS = 4;
@@ -17,11 +17,10 @@ const AI_PROVIDERS: { id: AIProvider; label: string; desc: string }[] = [
 
 const OnboardingPage: React.FC = () => {
   const navigate = useNavigate();
-  const { userSettings, setUserSettings } = useAppContext();
+  const { userSettings, setUserSettings, user, courses, fetchCourses } = useAppContext();
   const [step, setStep] = useState(1);
   const [isFinishing, setIsFinishing] = useState(false);
 
-  // Step 1: Agents
   const [agents, setAgents] = useState({
     agentAutoOrganizer: false,
     agentStudyPlanner: false,
@@ -29,7 +28,6 @@ const OnboardingPage: React.FC = () => {
     agentMultiStep: false,
   });
 
-  // Step 3: AI provider + key
   const [provider, setProvider] = useState<AIProvider>('gemini');
   const [apiKey, setApiKey] = useState('');
 
@@ -73,7 +71,7 @@ const OnboardingPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg">
+      <div className={`w-full mx-auto ${step === 2 ? 'max-w-2xl' : 'max-w-lg'}`}>
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl">🎓</div>
           <h1 className="text-3xl font-black text-gray-900">Welcome to ProfSummarizer</h1>
@@ -115,17 +113,13 @@ const OnboardingPage: React.FC = () => {
             </div>
           )}
 
-          {step === 2 && (
-            <div className="space-y-6">
+          {step === 2 && user && (
+            <div className="space-y-4">
               <div className="text-center">
-                <h2 className="text-xl font-black text-gray-900">Canvas LMS</h2>
-                <p className="text-sm text-gray-500 mt-1">Connect your Canvas account to import course materials. You can skip this and set it up later in Settings.</p>
+                <h2 className="text-xl font-black text-gray-900">Your classes</h2>
+                <p className="text-sm text-gray-500 mt-1">Pull names from your calendar (.ics) or schedule PDF—or type them.</p>
               </div>
-              <CanvasConnectPanel
-                userSettings={userSettings}
-                onSettingsChange={setUserSettings}
-                compact
-              />
+              <CoursesSetupPanel compact userId={user.id} courses={courses} onCoursesChanged={fetchCourses} />
             </div>
           )}
 
