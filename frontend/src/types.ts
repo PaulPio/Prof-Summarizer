@@ -125,6 +125,33 @@ export interface StudyPlannerConfig {
   };
 }
 
+export interface StudyPlanItem {
+  lectureId: string;
+  lectureTitle: string;
+  reason: string;
+  suggestedActivities?: string[];
+  dueDate?: string;
+}
+
+export interface StudyPlan {
+  planItems: StudyPlanItem[];
+  knowledgeGaps: string[];
+  courseName?: string;
+  courseId?: string;
+  lectureCount?: number;
+}
+
+export interface SavedStudyPlan {
+  id: string;
+  userId: string;
+  courseId: string;
+  title: string;
+  config: StudyPlannerConfig;
+  plan: StudyPlan;
+  createdAt: string;
+  agentJobId?: string;
+}
+
 export interface ApiError {
   error: string;
   code: string;

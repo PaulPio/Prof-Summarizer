@@ -1,13 +1,18 @@
 import { createContext, type Dispatch, type SetStateAction } from 'react';
 import type { User, SavedLecture, Course, UserSettings, AgentJob } from '../types';
 
+export interface FetchLecturesOptions {
+  silent?: boolean;
+}
+
 export interface AppContextValue {
   user: User | null;
   setUser: (user: User | null) => void;
   lectures: SavedLecture[];
   setLectures: Dispatch<SetStateAction<SavedLecture[]>>;
   isLoadingLectures: boolean;
-  fetchLectures: () => Promise<void>;
+  fetchLectures: (options?: FetchLecturesOptions) => Promise<void>;
+  refreshLecture: (lectureId: string) => Promise<void>;
   deleteLecture: (id: string) => Promise<void>;
   courses: Course[];
   setCourses: Dispatch<SetStateAction<Course[]>>;

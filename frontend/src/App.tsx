@@ -8,6 +8,7 @@ import LectureListPanel from './components/LectureListPanel';
 import RecordPage from './pages/RecordPage';
 import LectureDetailPage from './pages/LectureDetailPage';
 import SettingsPage from './pages/SettingsPage';
+import StudyPlannerPage from './pages/StudyPlannerPage';
 import OnboardingPage from './pages/OnboardingPage';
 import { supabase } from './services/supabase';
 
@@ -116,6 +117,13 @@ const AppShell: React.FC = () => {
             </button>
             <button
               type="button"
+              onClick={() => navigate('/planner')}
+              className="hidden sm:inline-flex px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
+            >
+              Study planner
+            </button>
+            <button
+              type="button"
               onClick={() => navigate('/settings')}
               className="p-2 hover:bg-stone-100 rounded-lg text-stone-600"
               title="Settings"
@@ -157,6 +165,7 @@ const AppShell: React.FC = () => {
               <Routes>
                 <Route path="/" element={<RecordPage />} />
                 <Route path="/lecture/:id" element={<LectureDetailPage />} />
+                <Route path="/planner" element={<StudyPlannerPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

@@ -8,14 +8,14 @@ import CornellNotesDisplay from '../components/CornellNotesDisplay';
 import StudyModePanel from '../components/StudyModePanel';
 import ChatWindow from '../components/ChatWindow';
 import NotionExportModal from '../components/NotionExportModal';
-import ResearchPanel from '../components/ResearchPanel';
+import { ResearchAssistantGate } from '../components/ResearchPanel';
 import AutoOrganizerSuggestionCard from '../components/AutoOrganizerSuggestionCard';
 import { displayCourseColor } from '../constants/courseColors';
 
 const LectureDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, lectures, setLectures, courses, userSettings, agentJobs, fetchLectures } = useAppContext();
+  const { user, lectures, setLectures, courses, userSettings, agentJobs, refreshLecture } = useAppContext();
 
   const lecture = lectures.find(l => l.id === id);
 
@@ -23,13 +23,18 @@ const LectureDetailPage: React.FC = () => {
     j => j.lecture_id === id && j.agent_type === 'pipeline' && j.status === 'running',
   );
 
+  const wasPipelineLoading = React.useRef(false);
   useEffect(() => {
-    if (!id || !isStudyMaterialsLoading) return;
-    const interval = setInterval(() => {
-      fetchLectures().catch(() => {});
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [id, isStudyMaterialsLoading, fetchLectures]);
+    if (!id) return;
+    if (isStudyMaterialsLoading) {
+      wasPipelineLoading.current = true;
+      return;
+    }
+    if (wasPipelineLoading.current) {
+      wasPipelineLoading.current = false;
+      refreshLecture(id).catch(() => {});
+    }
+  }, [id, isStudyMaterialsLoading, refreshLecture]);
 
   const [showCornellNotes, setShowCornellNotes] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -142,12 +147,10 @@ const LectureDetailPage: React.FC = () => {
         />
 
         {lecture.confusionMarkers && lecture.confusionMarkers.length > 0 && (
-          <div className="p-6 sm:p-8 bg-white rounded-[20px] sm:rounded-[32px] border shadow-sm space-y-4">
-            <ResearchPanel
-              lectureId={lecture.id}
-              confusionMarkers={lecture.confusionMarkers}
-            />
-          </div>
+          <ResearchAssistantGate
+            lectureId={lecture.id}
+            confusionMarkers={lecture.confusionMarkers}
+          />
         )}
 
         <div className="mt-10 sm:mt-16 pt-10 sm:pt-16 border-t border-gray-100">

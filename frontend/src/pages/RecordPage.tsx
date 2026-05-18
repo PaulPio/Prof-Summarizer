@@ -13,7 +13,7 @@ import {
 
 const RecordPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, setLectures, courses, userSettings, addAgentJob, updateAgentJob, activeCourseId, fetchLectures } = useAppContext();
+  const { user, setLectures, courses, userSettings, addAgentJob, updateAgentJob, activeCourseId, refreshLecture } = useAppContext();
 
   const [status, setStatus] = useState<AppState>(AppState.IDLE);
   const [errorMessage, setErrorMessage] = useState('');
@@ -228,7 +228,7 @@ const RecordPage: React.FC = () => {
           });
 
           const onPipelineDone = () => {
-            fetchLectures().catch(err => console.error('Failed to refresh lectures:', err));
+            refreshLecture(savedId).catch(err => console.error('Failed to refresh lecture:', err));
           };
 
           if (user.id === 'guest') {

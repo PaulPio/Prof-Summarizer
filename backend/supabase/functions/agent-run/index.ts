@@ -119,7 +119,45 @@ Deno.serve(async (req: Request) => {
       .update({ status: 'completed', result, completed_at: completedAt })
       .eq('id', jobId);
 
-    return json({ jobId, status: 'completed', result, createdAt, completedAt }, 200);
+    let savedPlanId: string | undefined;
+    if (agent_type === 'study_planner' && study_planner_config?.course_id) {
+      const planResult = result as {
+        courseName?: string;
+        courseId?: string;
+        lectureCount?: number;
+        planItems?: unknown[];
+        knowledgeGaps?: unknown[];
+      };
+      const courseName = planResult.courseName ?? 'Course';
+      const lectureCount = planResult.lectureCount ?? study_planner_config.lecture_ids?.length ?? 0;
+      const dateLabel = new Date().toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      const title = `${courseName} · ${lectureCount} lecture${lectureCount !== 1 ? 's' : ''} · ${dateLabel}`;
+
+      const { data: savedPlan, error: saveErr } = await adminClient
+        .from('study_plans')
+        .insert({
+          user_id: user.id,
+          course_id: study_planner_config.course_id,
+          title,
+          config: study_planner_config,
+          plan: result,
+          agent_job_id: jobId,
+        })
+        .select('id')
+        .single();
+
+      if (saveErr) {
+        console.error('Failed to save study plan:', saveErr);
+      } else if (savedPlan) {
+        savedPlanId = savedPlan.id;
+      }
+    }
+
+    return json({ jobId, status: 'completed', result, createdAt, completedAt, savedPlanId }, 200);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const completedAt = new Date().toISOString();

@@ -12,11 +12,11 @@ const AgentJobStatusBar: React.FC = () => {
       {visible.map(job => (
         <div
           key={job.id}
-          className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-gray-100 text-xs text-gray-700"
+          className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-stone-100 text-xs text-stone-700"
         >
           <div className="flex items-center gap-2 min-w-0">
             {job.status === 'running' && (
-              <span className="inline-block w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+              <span className="inline-block w-3 h-3 border-2 border-amber-800 border-t-transparent rounded-full animate-spin flex-shrink-0" />
             )}
             {job.status === 'completed' && (
               <span className="text-green-500 flex-shrink-0">✓</span>

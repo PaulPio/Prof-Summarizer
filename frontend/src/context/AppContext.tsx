@@ -4,7 +4,7 @@ import { User, AgentJob } from '../types';
 import { supabase } from '../services/supabase';
 import { StorageService } from '../services/storageService';
 import { SettingsService } from '../services/settingsService';
-import { AppContext, type AppContextValue } from './appContextInstance';
+import { AppContext, type AppContextValue, type FetchLecturesOptions } from './appContextInstance';
 
 export type { AppContextValue };
 
@@ -67,19 +67,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchLectures = useCallback(async () => {
+  const fetchLectures = useCallback(async (options?: FetchLecturesOptions) => {
     if (!user) {
       setLectures([]);
       return;
     }
-    setIsLoadingLectures(true);
+    if (!options?.silent) {
+      setIsLoadingLectures(true);
+    }
     try {
       const data = await StorageService.getLectures(user.id);
-      setLectures(data);
+      setLectures(prev => {
+        if (prev.length === data.length && prev.every((l, i) => l.id === data[i]?.id && l.title === data[i]?.title)) {
+          const same = prev.every((l, i) => {
+            const n = data[i];
+            if (!n) return false;
+            return (
+              l.flashcards?.length === n.flashcards?.length &&
+              l.quizData?.length === n.quizData?.length &&
+              l.title === n.title
+            );
+          });
+          if (same) return prev;
+        }
+        return data;
+      });
     } catch (err) {
       console.error('Failed to fetch lectures:', err);
     } finally {
-      setIsLoadingLectures(false);
+      if (!options?.silent) {
+        setIsLoadingLectures(false);
+      }
+    }
+  }, [user]);
+
+  const refreshLecture = useCallback(async (lectureId: string) => {
+    if (!user) return;
+    try {
+      const updated = await StorageService.getLectureById(user.id, lectureId);
+      if (!updated) return;
+      setLectures(prev => {
+        const idx = prev.findIndex(l => l.id === lectureId);
+        if (idx === -1) return [updated, ...prev];
+        const next = [...prev];
+        next[idx] = updated;
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to refresh lecture:', err);
     }
   }, [user]);
 
@@ -152,6 +187,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             result: updated.result,
             completed_at: updated.completed_at,
           });
+          if (
+            updated.status === 'completed' &&
+            updated.agent_type === 'pipeline' &&
+            updated.lecture_id
+          ) {
+            refreshLecture(updated.lecture_id).catch(() => {});
+          }
         },
       )
       .subscribe((status) => {
@@ -179,7 +221,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       supabase.removeChannel(channel);
       realtimeChannelRef.current = null;
     };
-  }, [user, updateAgentJob]);
+  }, [user, updateAgentJob, refreshLecture]);
 
   return (
     <AppContext.Provider value={{
@@ -187,6 +229,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       lectures, setLectures,
       isLoadingLectures,
       fetchLectures,
+      refreshLecture,
       deleteLecture,
       courses, setCourses,
       fetchCourses,

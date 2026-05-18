@@ -7,6 +7,7 @@ export interface AgentJobResponse {
   result: any;
   createdAt: string;
   completedAt: string;
+  savedPlanId?: string;
 }
 
 async function runAgent(payload: object): Promise<AgentJobResponse> {

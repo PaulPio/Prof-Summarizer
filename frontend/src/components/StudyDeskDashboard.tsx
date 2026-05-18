@@ -101,8 +101,8 @@ const StudyDeskDashboard: React.FC<StudyDeskDashboardProps> = ({ onStartRecordin
             <button
               type="button"
               onClick={() => {
-                const q = activeCourseId ? `?tab=agents&course=${activeCourseId}` : '?tab=agents';
-                navigate(`/settings${q}`);
+                const q = activeCourseId ? `?course=${activeCourseId}` : '';
+                navigate(`/planner${q}`);
               }}
               className="mt-4 text-sm font-semibold text-amber-800 hover:underline"
             >

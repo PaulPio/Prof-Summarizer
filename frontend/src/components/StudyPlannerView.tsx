@@ -1,23 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { AgentService } from '../services/agentService';
-import type { SavedLecture, StudyPlannerConfig } from '../types';
-
-interface StudyPlanItem {
-  lectureId: string;
-  lectureTitle: string;
-  reason: string;
-  suggestedActivities?: string[];
-  dueDate?: string;
-}
-
-interface StudyPlan {
-  planItems: StudyPlanItem[];
-  knowledgeGaps: string[];
-  courseName?: string;
-  courseId?: string;
-}
+import { StorageService } from '../services/storageService';
+import type { SavedLecture, SavedStudyPlan, StudyPlannerConfig, StudyPlan } from '../types';
 
 const DEFAULT_MATERIALS: StudyPlannerConfig['materials'] = {
   summary: true,
@@ -26,9 +12,12 @@ const DEFAULT_MATERIALS: StudyPlannerConfig['materials'] = {
   quiz: true,
 };
 
-const StudyPlannerView: React.FC = () => {
+interface StudyPlannerViewProps {
+  onPlanGenerated: (plan: SavedStudyPlan) => void;
+}
+
+const StudyPlannerView: React.FC<StudyPlannerViewProps> = ({ onPlanGenerated }) => {
   const { lectures, courses, activeCourseId, addAgentJob, updateAgentJob, user } = useAppContext();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const initialCourseId = searchParams.get('course') || activeCourseId || courses[0]?.id || '';
@@ -37,7 +26,6 @@ const StudyPlannerView: React.FC = () => {
   const [selectedLectureIds, setSelectedLectureIds] = useState<Set<string>>(new Set());
   const [materials, setMaterials] = useState(DEFAULT_MATERIALS);
   const [loading, setLoading] = useState(false);
-  const [plan, setPlan] = useState<StudyPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const coursesWithLectures = useMemo(() => {
@@ -53,6 +41,7 @@ const StudyPlannerView: React.FC = () => {
   }, [lectures, selectedCourseId]);
 
   const selectedCourse = courses.find(c => c.id === selectedCourseId);
+  const lectureIdsKey = courseLectures.map(l => l.id).join(',');
 
   useEffect(() => {
     if (!selectedCourseId && coursesWithLectures[0]) {
@@ -62,9 +51,8 @@ const StudyPlannerView: React.FC = () => {
 
   useEffect(() => {
     setSelectedLectureIds(new Set(courseLectures.map(l => l.id)));
-    setPlan(null);
     setError(null);
-  }, [selectedCourseId, courseLectures.map(l => l.id).join(',')]);
+  }, [selectedCourseId, lectureIdsKey]);
 
   const toggleLecture = (id: string) => {
     setSelectedLectureIds(prev => {
@@ -85,7 +73,7 @@ const StudyPlannerView: React.FC = () => {
   const anyMaterial = Object.values(materials).some(Boolean);
 
   const handleGenerate = async () => {
-    if (!selectedCourseId || selectedLectureIds.size === 0) {
+    if (!user || !selectedCourseId || selectedLectureIds.size === 0) {
       setError('Choose a course and at least one lecture.');
       return;
     }
@@ -105,7 +93,7 @@ const StudyPlannerView: React.FC = () => {
     const tempId = `planner-${Date.now()}`;
     addAgentJob({
       id: tempId,
-      user_id: user?.id ?? '',
+      user_id: user.id,
       agent_type: 'study_planner',
       status: 'running',
       created_at: new Date().toISOString(),
@@ -114,7 +102,51 @@ const StudyPlannerView: React.FC = () => {
     try {
       const response = await AgentService.triggerStudyPlanner(config);
       updateAgentJob(response.jobId ?? tempId, { status: 'completed' });
-      setPlan(response.result as StudyPlan);
+      const plan = response.result as StudyPlan;
+
+      let saved: SavedStudyPlan;
+
+      if (user.id === 'guest') {
+        const courseName = plan.courseName ?? selectedCourse?.name ?? 'Course';
+        const title = `${courseName} · ${config.lectureIds.length} lectures · ${new Date().toLocaleDateString()}`;
+        saved = StorageService.saveStudyPlanGuest(
+          user.id,
+          selectedCourseId,
+          title,
+          config,
+          plan,
+          response.jobId,
+        );
+      } else if (response.savedPlanId) {
+        const list = await StorageService.listStudyPlans(user.id);
+        saved = list.find(p => p.id === response.savedPlanId) ?? {
+          id: response.savedPlanId,
+          userId: user.id,
+          courseId: selectedCourseId,
+          title: plan.courseName
+            ? `${plan.courseName} · ${config.lectureIds.length} lectures`
+            : 'Study plan',
+          config,
+          plan,
+          createdAt: response.completedAt ?? new Date().toISOString(),
+          agentJobId: response.jobId,
+        };
+      } else {
+        const courseName = plan.courseName ?? selectedCourse?.name ?? 'Course';
+        const title = `${courseName} · ${config.lectureIds.length} lectures · ${new Date().toLocaleDateString()}`;
+        saved = {
+          id: response.jobId,
+          userId: user.id,
+          courseId: selectedCourseId,
+          title,
+          config,
+          plan,
+          createdAt: response.completedAt ?? new Date().toISOString(),
+          agentJobId: response.jobId,
+        };
+      }
+
+      onPlanGenerated(saved);
     } catch (err) {
       updateAgentJob(tempId, { status: 'failed' });
       const message = err instanceof Error ? err.message : 'Failed to generate study plan.';
@@ -151,15 +183,13 @@ const StudyPlannerView: React.FC = () => {
   return (
     <div className="space-y-6 rounded-2xl border border-stone-200 bg-stone-50/50 p-5 sm:p-6">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Study planner</p>
-        <h2 className="font-serif text-2xl text-stone-900 mt-1">Plan one course at a time</h2>
-        <p className="text-sm text-stone-600 mt-2 max-w-xl">
-          Pick a course folder, choose which lectures to include, and tell the planner which materials to weigh.
-          Plans never mix lectures from different courses.
+        <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">New plan</p>
+        <h2 className="font-serif text-xl text-stone-900 mt-1">Generate a study plan</h2>
+        <p className="text-sm text-stone-600 mt-2">
+          Pick a course folder, lectures, and materials. Each generation saves a new plan you can revisit later.
         </p>
       </header>
 
-      {/* Step 1 — Course */}
       <section className="space-y-2">
         <h3 className="text-sm font-bold text-stone-800">1. Course folder</h3>
         <select
@@ -181,7 +211,6 @@ const StudyPlannerView: React.FC = () => {
         )}
       </section>
 
-      {/* Step 2 — Lectures */}
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-bold text-stone-800">2. Lectures in this folder</h3>
@@ -198,7 +227,7 @@ const StudyPlannerView: React.FC = () => {
 
         {courseLectures.length === 0 ? (
           <p className="text-sm text-stone-500 bg-white rounded-xl border border-stone-200 p-4">
-            No lectures in this course yet. Drag lectures into this folder from the lecture list.
+            No lectures in this course yet.
           </p>
         ) : (
           <ul className="max-h-56 overflow-y-auto space-y-2 rounded-xl border border-stone-200 bg-white p-2">
@@ -233,9 +262,8 @@ const StudyPlannerView: React.FC = () => {
         <p className="text-xs text-stone-500">{selectedLectureIds.size} of {courseLectures.length} selected</p>
       </section>
 
-      {/* Step 3 — Materials */}
       <section className="space-y-3">
-        <h3 className="text-sm font-bold text-stone-800">3. Materials to include in the plan</h3>
+        <h3 className="text-sm font-bold text-stone-800">3. Materials to include</h3>
         <div className="grid sm:grid-cols-2 gap-2">
           {(
             [
@@ -279,82 +307,13 @@ const StudyPlannerView: React.FC = () => {
               Building plan…
             </>
           ) : (
-            <>📅 {plan ? 'Regenerate plan' : 'Generate study plan'}</>
+            <>Generate study plan</>
           )}
         </button>
-        {plan && (
-          <p className="text-xs text-stone-500">
-            Regenerating replaces the plan below (same course & selection).
-          </p>
-        )}
       </div>
 
       {error && (
         <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>
-      )}
-
-      {plan && (
-        <div className="space-y-6 pt-4 border-t border-stone-200">
-          {plan.courseName && (
-            <p className="text-sm text-amber-800 font-semibold">
-              Plan for {plan.courseName}
-              {plan.planItems.length > 0 && ` · ${plan.planItems.length} steps`}
-            </p>
-          )}
-
-          {plan.planItems.length === 0 ? (
-            <p className="text-sm text-stone-500 bg-white rounded-xl border border-stone-200 px-4 py-4">
-              No items generated. Try selecting more lectures or enabling more materials.
-            </p>
-          ) : (
-            <ol className="space-y-3 list-none">
-              {plan.planItems.map((item, i) => (
-                <li key={item.lectureId}>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/lecture/${item.lectureId}`)}
-                    className="w-full text-left flex items-start gap-3 p-4 bg-white rounded-2xl border border-stone-200 shadow-sm hover:border-amber-200 hover:shadow transition-all"
-                  >
-                    <span className="flex-shrink-0 w-7 h-7 rounded-full bg-amber-100 text-amber-900 text-xs font-bold flex items-center justify-center">
-                      {i + 1}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-stone-900 text-sm">{item.lectureTitle}</p>
-                      <p className="text-xs text-stone-600 mt-1 leading-relaxed">{item.reason}</p>
-                      {item.suggestedActivities && item.suggestedActivities.length > 0 && (
-                        <p className="text-xs text-amber-800 mt-2 font-medium">
-                          {item.suggestedActivities.join(' · ')}
-                        </p>
-                      )}
-                      {item.dueDate && (
-                        <p className="text-xs text-stone-500 mt-1">
-                          Suggested by{' '}
-                          {new Date(item.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ol>
-          )}
-
-          {plan.knowledgeGaps.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-bold text-stone-700 uppercase tracking-wide">Topics to review</h3>
-              <div className="flex flex-wrap gap-2">
-                {plan.knowledgeGaps.map(gap => (
-                  <span
-                    key={gap}
-                    className="px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium"
-                  >
-                    {gap}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       )}
     </div>
   );

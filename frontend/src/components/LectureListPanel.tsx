@@ -89,12 +89,15 @@ const LectureListPanel: React.FC<LectureListPanelProps> = ({ onSelect }) => {
       </header>
 
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-        {isLoadingLectures && (
+        {isLoadingLectures && lectures.length === 0 && (
           <p className="text-sm text-stone-400 text-center py-8">Loading…</p>
         )}
-        {!isLoadingLectures && filtered.length === 0 && (
+        {!isLoadingLectures && filtered.length === 0 && lectures.length > 0 && (
+          <p className="text-sm text-stone-400 text-center py-8 px-2">No matches.</p>
+        )}
+        {!isLoadingLectures && lectures.length === 0 && (
           <p className="text-sm text-stone-400 text-center py-8 px-2">
-            {query ? 'No matches.' : 'No lectures yet. Start a capture from your study desk.'}
+            No lectures yet. Start a capture from your study desk.
           </p>
         )}
         {filtered.map(lecture => {

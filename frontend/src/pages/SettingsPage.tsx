@@ -6,7 +6,6 @@ import { SettingsService } from '../services/settingsService';
 import { useAppContext } from '../context/AppContext';
 import CoursesSetupPanel from '../components/CoursesSetupPanel';
 import NotionConnectPanel from '../components/NotionConnectPanel';
-import StudyPlannerView from '../components/StudyPlannerView';
 
 const AI_PROVIDERS: { id: AIProvider; label: string }[] = [
   { id: 'gemini', label: 'Google Gemini' },
@@ -502,7 +501,13 @@ const SettingsPage: React.FC = () => {
 
             {agentToggles.agentStudyPlanner && (
               <div className="pt-2 border-t border-gray-100">
-                <StudyPlannerView />
+                <button
+                  type="button"
+                  onClick={() => navigate('/planner')}
+                  className="text-sm font-semibold text-amber-800 hover:text-amber-900"
+                >
+                  Open Study planner →
+                </button>
               </div>
             )}
           </div>

@@ -1,8 +1,46 @@
 import { supabase } from "./supabase";
-import { SavedLecture, Flashcard, QuizQuestion, Course } from "../types";
+import { SavedLecture, Flashcard, QuizQuestion, Course, SavedStudyPlan, StudyPlannerConfig, StudyPlan } from "../types";
 
 const LOCAL_STORAGE_KEY = 'prof_summarizer_lectures_guest';
 const LOCAL_COURSES_KEY = 'prof_summarizer_courses_guest';
+const LOCAL_STUDY_PLANS_KEY = 'prof_summarizer_study_plans_guest';
+
+function mapStudyPlanRow(row: Record<string, unknown>): SavedStudyPlan {
+  const config = row.config as Record<string, unknown>;
+  const materials = (config.materials ?? {}) as Record<string, boolean>;
+  return {
+    id: String(row.id),
+    userId: String(row.user_id),
+    courseId: String(row.course_id),
+    title: String(row.title),
+    config: {
+      courseId: String(config.course_id ?? config.courseId ?? row.course_id),
+      lectureIds: (config.lecture_ids ?? config.lectureIds ?? []) as string[],
+      materials: {
+        summary: materials.summary !== false,
+        cornellNotes: materials.cornell_notes ?? materials.cornellNotes ?? true,
+        flashcards: materials.flashcards !== false,
+        quiz: materials.quiz !== false,
+      },
+    },
+    plan: row.plan as StudyPlan,
+    createdAt: String(row.created_at),
+    agentJobId: row.agent_job_id ? String(row.agent_job_id) : undefined,
+  };
+}
+
+function guestStudyPlans(): SavedStudyPlan[] {
+  try {
+    const stored = localStorage.getItem(LOCAL_STUDY_PLANS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveGuestStudyPlans(plans: SavedStudyPlan[]) {
+  localStorage.setItem(LOCAL_STUDY_PLANS_KEY, JSON.stringify(plans));
+}
 
 export const StorageService = {
   getLectures: async (userId: string): Promise<SavedLecture[]> => {
@@ -336,5 +374,93 @@ export const StorageService = {
 
     if (error) throw new Error(error.message);
     if (!data) throw new Error('Failed to update lecture — no rows updated');
+  },
+
+  getLectureById: async (userId: string, lectureId: string): Promise<SavedLecture | null> => {
+    if (userId === 'guest') {
+      const lectures = await StorageService.getLectures(userId);
+      return lectures.find(l => l.id === lectureId) ?? null;
+    }
+
+    const { data, error } = await supabase
+      .from('lectures')
+      .select('*')
+      .eq('id', lectureId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      userId: data.user_id,
+      title: data.title,
+      date: data.date,
+      transcript: data.transcript,
+      summary: data.summary,
+      cornellNotes: data.cornell_notes,
+      flashcards: data.flashcards,
+      quizData: data.quiz_data,
+      confusionMarkers: data.confusion_markers,
+      files: data.files,
+      courseId: data.course_id,
+    } as SavedLecture;
+  },
+
+  listStudyPlans: async (userId: string): Promise<SavedStudyPlan[]> => {
+    if (userId === 'guest') {
+      return guestStudyPlans().sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('study_plans')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return (data || []).map((row: Record<string, unknown>) => mapStudyPlanRow(row));
+  },
+
+  saveStudyPlanGuest: (
+    userId: string,
+    courseId: string,
+    title: string,
+    config: StudyPlannerConfig,
+    plan: StudyPlan,
+    agentJobId?: string,
+  ): SavedStudyPlan => {
+    const entry: SavedStudyPlan = {
+      id: Math.random().toString(36).slice(2, 11),
+      userId,
+      courseId,
+      title,
+      config,
+      plan,
+      createdAt: new Date().toISOString(),
+      agentJobId,
+    };
+    const plans = guestStudyPlans();
+    plans.unshift(entry);
+    saveGuestStudyPlans(plans);
+    return entry;
+  },
+
+  deleteStudyPlan: async (userId: string, planId: string): Promise<void> => {
+    if (userId === 'guest') {
+      saveGuestStudyPlans(guestStudyPlans().filter(p => p.id !== planId));
+      return;
+    }
+
+    const { error } = await supabase
+      .from('study_plans')
+      .delete()
+      .eq('id', planId)
+      .eq('user_id', userId);
+
+    if (error) throw new Error(error.message);
   },
 };
