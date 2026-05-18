@@ -37,7 +37,7 @@ export const API = {
         transcript: string,
         files: { base64: string; mimeType: string }[],
         confusionMarkers: number[]
-    ): Promise<{ summary: LectureSummary; cornellNotes: CornellNotes }> => {
+    ): Promise<{ summary: LectureSummary; cornellNotes: CornellNotes; title: string }> => {
         return callEdgeFunction('summarize', { transcript, files, confusionMarkers });
     },
 

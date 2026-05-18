@@ -40,7 +40,7 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Invalid JSON', code: 'MISSING_FIELD' }, 400);
   }
 
-  const { agent_type, lecture_id, pipeline_config } = body;
+  const { agent_type, lecture_id, pipeline_config, study_planner_config } = body;
 
   if (!agent_type) return json({ error: 'agent_type is required', code: 'MISSING_FIELD' }, 400);
 
@@ -100,7 +100,7 @@ Deno.serve(async (req: Request) => {
         result = await runAutoOrganizer(user.id, lecture_id, adminClient);
         break;
       case 'study_planner':
-        result = await runStudyPlanner(user.id, adminClient);
+        result = await runStudyPlanner(user.id, adminClient, study_planner_config);
         break;
       case 'research':
         result = await runResearchAgent(user.id, lecture_id, adminClient);

@@ -473,7 +473,7 @@ const SettingsPage: React.FC = () => {
             <div className="space-y-4">
               {[
                 { key: 'agentAutoOrganizer', label: 'Auto-Organizer', desc: 'Automatically suggests which course a lecture belongs to after saving.' },
-                { key: 'agentStudyPlanner', label: 'Study Planner', desc: 'Generates a prioritized study schedule based on your lecture history and quiz performance.' },
+                { key: 'agentStudyPlanner', label: 'Study Planner', desc: 'Build a prioritized plan for one course folder — you choose lectures and which materials to include.' },
                 { key: 'agentResearch', label: 'Research Assistant', desc: 'Finds study directions for topics you marked as confusing during recording.' },
                 { key: 'agentMultiStep', label: 'Multi-Step Pipeline', desc: 'Runs a configurable sequence of actions (summarize → flashcards → export) automatically after each lecture.' },
               ].map(({ key, label, desc }) => (

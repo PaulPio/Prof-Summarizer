@@ -1,15 +1,19 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppState, LectureFile, SavedLecture } from '../types';
 import { API } from '../services/api';
 import { StorageService } from '../services/storageService';
 import { useAppContext } from '../context/AppContext';
 import ConfusionButton from '../components/ConfusionButton';
-import { AgentService } from '../services/agentService';
+import StudyDeskDashboard from '../components/StudyDeskDashboard';
+import {
+  runGuestStudyMaterials,
+  triggerPostLecturePipeline,
+} from '../services/postLecturePipeline';
 
 const RecordPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, setLectures, courses, userSettings, addAgentJob, updateAgentJob } = useAppContext();
+  const { user, setLectures, courses, userSettings, addAgentJob, updateAgentJob, activeCourseId, fetchLectures } = useAppContext();
 
   const [status, setStatus] = useState<AppState>(AppState.IDLE);
   const [errorMessage, setErrorMessage] = useState('');
@@ -26,6 +30,12 @@ const RecordPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const activeMimeTypeRef = useRef<string>('audio/wav');
+
+  useEffect(() => {
+    if (status === AppState.REVIEWING && activeCourseId) {
+      setSelectedCourseId(activeCourseId);
+    }
+  }, [status, activeCourseId]);
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -176,12 +186,20 @@ const RecordPage: React.FC = () => {
           setStatus(AppState.SUMMARIZING);
 
           const filesForApi = uploadedFiles.map(f => ({ base64: f.base64, mimeType: f.mimeType }));
-          const { summary, cornellNotes } = await API.summarize(transcript, filesForApi, confusionMarkers);
+          const { summary, cornellNotes, title: generatedTitle } = await API.summarize(
+            transcript,
+            filesForApi,
+            confusionMarkers,
+          );
+
+          const lectureTitle =
+            generatedTitle?.trim() ||
+            `Lecture ${new Date().toLocaleDateString()}`;
 
           const newLecture: SavedLecture = {
             id: '',
             userId: user.id,
-            title: `Lecture ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`,
+            title: lectureTitle,
             date: new Date().toISOString(),
             transcript,
             summary,
@@ -198,22 +216,35 @@ const RecordPage: React.FC = () => {
           setRecordedBlob(null);
           setConfusionMarkers([]);
 
-          // Fire-and-forget agent triggers (non-blocking — navigate immediately)
-          if (user.id !== 'guest') {
-            if (userSettings?.agentAutoOrganizer) {
-              const tempId = `auto-org-${savedId}`;
-              addAgentJob({ id: tempId, user_id: user.id, lecture_id: savedId, agent_type: 'auto_organizer', status: 'running', created_at: new Date().toISOString() });
-              AgentService.triggerAutoOrganizer(savedId)
-                .then(resp => updateAgentJob(resp.jobId ?? tempId, { status: 'completed' }))
-                .catch(() => updateAgentJob(tempId, { status: 'failed' }));
-            }
-            if (userSettings?.agentMultiStep) {
-              const tempId = `pipeline-${savedId}`;
-              addAgentJob({ id: tempId, user_id: user.id, lecture_id: savedId, agent_type: 'pipeline', status: 'running', created_at: new Date().toISOString() });
-              AgentService.triggerPipeline(savedId)
-                .then(resp => updateAgentJob(resp.jobId ?? tempId, { status: 'completed' }))
-                .catch(() => updateAgentJob(tempId, { status: 'failed' }));
-            }
+          // Flashcards + quiz (and optional pipeline steps) — non-blocking
+          const pipelineJobId = `post-lecture-${savedId}`;
+          addAgentJob({
+            id: pipelineJobId,
+            user_id: user.id,
+            lecture_id: savedId,
+            agent_type: 'pipeline',
+            status: 'running',
+            created_at: new Date().toISOString(),
+          });
+
+          const onPipelineDone = () => {
+            fetchLectures().catch(err => console.error('Failed to refresh lectures:', err));
+          };
+
+          if (user.id === 'guest') {
+            runGuestStudyMaterials(savedId, user.id, transcript)
+              .then(() => {
+                onPipelineDone();
+                updateAgentJob(pipelineJobId, { status: 'completed' });
+              })
+              .catch(() => updateAgentJob(pipelineJobId, { status: 'failed' }));
+          } else {
+            triggerPostLecturePipeline(savedId, userSettings)
+              .then(resp => {
+                onPipelineDone();
+                updateAgentJob(resp.jobId ?? pipelineJobId, { status: 'completed' });
+              })
+              .catch(() => updateAgentJob(pipelineJobId, { status: 'failed' }));
           }
 
           navigate(`/lecture/${savedId}`);
@@ -230,27 +261,14 @@ const RecordPage: React.FC = () => {
 
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-12">
-      {status === AppState.IDLE && (
-        <div className="max-w-2xl mx-auto space-y-8 sm:space-y-12 mt-8 sm:mt-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          <div className="text-center space-y-4 sm:space-y-6">
-            <div className="w-16 h-16 sm:w-24 sm:h-24 bg-white text-blue-600 rounded-[24px] sm:rounded-[32px] flex items-center justify-center mx-auto text-2xl sm:text-4xl shadow-2xl shadow-blue-100 ring-1 ring-gray-50">🎙️</div>
-            <div className="space-y-2 sm:space-y-3 px-4">
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 tracking-tight leading-tight">Extreme Lecture Capture</h2>
-              <p className="text-gray-500 text-base sm:text-lg md:text-xl font-medium">Transcribe and summarize your lectures with AI.</p>
-            </div>
-          </div>
-          <div className="flex flex-col sm:flex-row justify-center gap-4 px-4">
-            <button onClick={startRecording} className="flex-1 sm:flex-none px-8 sm:px-12 py-4 sm:py-6 bg-blue-600 text-white rounded-2xl sm:rounded-3xl text-lg sm:text-xl font-black hover:bg-blue-700 transition-all shadow-2xl shadow-blue-200 hover:scale-105 active:scale-95 flex items-center justify-center gap-3">
-              <span className="w-3 h-3 bg-white rounded-full animate-pulse"></span>
-              Start Recording
-            </button>
-            <input type="file" ref={audioInputRef} onChange={onAudioUpload} accept="audio/*" className="hidden" />
-            <button onClick={() => audioInputRef.current?.click()} className="flex-1 sm:flex-none px-8 sm:px-12 py-4 sm:py-6 bg-white text-gray-700 border-2 border-gray-200 rounded-2xl sm:rounded-3xl text-lg sm:text-xl font-black hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center justify-center gap-3">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-              Upload Audio
-            </button>
-          </div>
-          <p className="text-center text-gray-400 text-xs sm:text-sm">Supports MP3, WAV, WebM, M4A, OGG • No file size limit</p>
+            {status === AppState.IDLE && (
+        <div className="p-6 md:p-10">
+          <StudyDeskDashboard
+            onStartRecording={startRecording}
+            onUploadAudio={() => audioInputRef.current?.click()}
+          />
+          <input type="file" ref={audioInputRef} onChange={onAudioUpload} accept="audio/*" className="hidden" />
+          <p className="mt-6 text-stone-400 text-xs">Supports MP3, WAV, WebM, M4A, OGG</p>
         </div>
       )}
 

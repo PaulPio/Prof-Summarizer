@@ -302,10 +302,14 @@ async function runStep(
     const data = await res.json();
 
     if (fnName === 'summarize') {
-      const { summary, cornellNotes } = data as { summary: unknown; cornellNotes: unknown };
+      const { summary, cornellNotes, title } = data as { summary: unknown; cornellNotes: unknown; title?: string };
+      const patch: Record<string, unknown> = { summary, cornell_notes: cornellNotes };
+      if (typeof title === 'string' && title.trim()) {
+        patch.title = title.trim().slice(0, 120);
+      }
       const { error: upErr } = await adminClient
         .from('lectures')
-        .update({ summary, cornell_notes: cornellNotes })
+        .update(patch)
         .eq('id', lectureId)
         .eq('user_id', userId);
       if (upErr) throw new Error(upErr.message);

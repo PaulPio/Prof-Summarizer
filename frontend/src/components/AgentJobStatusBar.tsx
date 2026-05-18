@@ -46,7 +46,7 @@ function labelFor(agentType: string): string {
     case 'auto_organizer': return 'Auto-organizing lecture…';
     case 'study_planner': return 'Generating study plan…';
     case 'research': return 'Finding study directions…';
-    case 'pipeline': return 'Running pipeline…';
+    case 'pipeline': return 'Building study materials…';
     default: return 'Agent running…';
   }
 }

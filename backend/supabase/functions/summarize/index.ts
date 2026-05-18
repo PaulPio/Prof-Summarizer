@@ -3,6 +3,13 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, callGemini } from '../_shared/gemini.ts';
 import { resolveAIConfig, callAI } from '../_shared/ai-provider.ts';
 
+function sanitizeLectureTitle(raw: unknown): string {
+    if (typeof raw !== 'string') return '';
+    let t = raw.trim().replace(/^["']|["']$/g, '').replace(/\s+/g, ' ');
+    t = t.replace(/^lecture:\s*/i, '').replace(/^lecture\s+/i, '');
+    return t.slice(0, 120);
+}
+
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
@@ -44,9 +51,10 @@ Deno.serve(async (req) => {
 
         const systemInstruction = `You are an expert academic assistant. Analyze the provided lecture transcript and any attached visual context.
 
-Generate a comprehensive study guide in a single JSON response with two formats:
-1. Cornell Notes format (cues/notes/summary)
-2. Classic summary format (overview/keyPoints/vocabulary/actionItems)${confusionInstruction}`;
+Generate a comprehensive study guide in a single JSON response with:
+1. A short lecture title (5–12 words) that names the main topic — no dates, no "Lecture" prefix, no quotation marks
+2. Cornell Notes format (cues/notes/summary)
+3. Classic summary format (overview/keyPoints/vocabulary/actionItems)${confusionInstruction}`;
 
         // Build content parts — wrap transcript in user_content to prevent injection
         const parts: any[] = [{ text: `<user_content>\n${transcript}\n</user_content>` }];
@@ -62,6 +70,7 @@ Generate a comprehensive study guide in a single JSON response with two formats:
         const responseSchema = {
             type: 'object',
             properties: {
+                title: { type: 'string' },
                 cornell: {
                     type: 'object',
                     properties: {
@@ -89,7 +98,7 @@ Generate a comprehensive study guide in a single JSON response with two formats:
                     required: ['overview', 'keyPoints', 'vocabulary', 'actionItems'],
                 },
             },
-            required: ['cornell', 'classic'],
+            required: ['title', 'cornell', 'classic'],
         };
 
         const contents = [{ parts }];
@@ -104,9 +113,13 @@ Generate a comprehensive study guide in a single JSON response with two formats:
         const parsed = JSON.parse(result);
         const cornellNotes = parsed.cornell;
         const summary = parsed.classic;
+        let title = sanitizeLectureTitle(parsed.title);
+        if (!title && summary?.overview) {
+            title = sanitizeLectureTitle(String(summary.overview).split(/[.!?]/)[0]);
+        }
 
         return new Response(
-            JSON.stringify({ summary, cornellNotes }),
+            JSON.stringify({ summary, cornellNotes, title }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     } catch (error) {

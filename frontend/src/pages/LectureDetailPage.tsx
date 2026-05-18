@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Flashcard, QuizQuestion } from '../types';
 import { StorageService } from '../services/storageService';
@@ -10,13 +10,26 @@ import ChatWindow from '../components/ChatWindow';
 import NotionExportModal from '../components/NotionExportModal';
 import ResearchPanel from '../components/ResearchPanel';
 import AutoOrganizerSuggestionCard from '../components/AutoOrganizerSuggestionCard';
+import { displayCourseColor } from '../constants/courseColors';
 
 const LectureDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, lectures, setLectures, courses, userSettings } = useAppContext();
+  const { user, lectures, setLectures, courses, userSettings, agentJobs, fetchLectures } = useAppContext();
 
   const lecture = lectures.find(l => l.id === id);
+
+  const isStudyMaterialsLoading = agentJobs.some(
+    j => j.lecture_id === id && j.agent_type === 'pipeline' && j.status === 'running',
+  );
+
+  useEffect(() => {
+    if (!id || !isStudyMaterialsLoading) return;
+    const interval = setInterval(() => {
+      fetchLectures().catch(() => {});
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [id, isStudyMaterialsLoading, fetchLectures]);
 
   const [showCornellNotes, setShowCornellNotes] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -28,7 +41,7 @@ const LectureDetailPage: React.FC = () => {
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-gray-500">Lecture not found.</p>
-          <button onClick={() => navigate('/')} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm">Back Home</button>
+          <button onClick={() => navigate('/')} className="px-4 py-2 bg-amber-800 text-amber-50 rounded-xl font-semibold text-sm hover:bg-amber-900">Back home</button>
         </div>
       </div>
     );
@@ -70,15 +83,22 @@ const LectureDetailPage: React.FC = () => {
           {lecture.courseId && (() => {
             const course = courses.find(c => c.id === lecture.courseId);
             return course ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold text-white" style={{ backgroundColor: course.color }}>
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-stone-200 text-stone-800 shadow-sm">
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: displayCourseColor(course.color) }}
+                  aria-hidden
+                />
                 {course.name}
               </span>
-            ) : <span />;
+            ) : (
+              <span />
+            );
           })()}
           {userSettings?.hasNotionConnection && (
             <button
               onClick={() => setShowNotionExport(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-stone-900 text-stone-50 rounded-xl text-xs font-semibold hover:bg-stone-800 transition-colors"
             >
               <span>📓</span> Export to Notion
             </button>
@@ -95,11 +115,11 @@ const LectureDetailPage: React.FC = () => {
         )}
 
         {lecture.cornellNotes && (
-          <div className="flex items-center justify-center gap-2 bg-gray-100 rounded-full p-1 w-fit mx-auto">
-            <button onClick={() => setShowCornellNotes(true)} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${showCornellNotes ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+          <div className="flex items-center justify-center gap-2 bg-stone-100 rounded-full p-1 w-fit mx-auto border border-stone-200">
+            <button type="button" onClick={() => setShowCornellNotes(true)} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${showCornellNotes ? 'bg-white shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-700'}`}>
               📋 Cornell Notes
             </button>
-            <button onClick={() => setShowCornellNotes(false)} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${!showCornellNotes ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+            <button type="button" onClick={() => setShowCornellNotes(false)} className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${!showCornellNotes ? 'bg-white shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-700'}`}>
               📝 Classic Summary
             </button>
           </div>
@@ -116,6 +136,7 @@ const LectureDetailPage: React.FC = () => {
           lectureId={lecture.id}
           initialFlashcards={lecture.flashcards}
           initialQuizData={lecture.quizData}
+          isStudyMaterialsLoading={isStudyMaterialsLoading}
           onFlashcardsGenerated={handleFlashcardsGenerated}
           onQuizGenerated={handleQuizGenerated}
         />
@@ -144,7 +165,7 @@ const LectureDetailPage: React.FC = () => {
 
       <button
         onClick={() => setIsChatOpen(true)}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full shadow-lg shadow-indigo-200 hover:shadow-xl hover:scale-110 transition-all flex items-center justify-center group"
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-amber-800 text-amber-50 rounded-full shadow-lg shadow-amber-900/20 hover:bg-amber-900 hover:scale-105 transition-all flex items-center justify-center group"
         title="Ask Professor"
       >
         <span className="text-2xl">💬</span>

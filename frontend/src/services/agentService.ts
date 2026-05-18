@@ -1,4 +1,5 @@
 import { callEdgeFunction } from './api';
+import type { StudyPlannerConfig } from '../types';
 
 export interface AgentJobResponse {
   jobId: string;
@@ -17,8 +18,20 @@ export const AgentService = {
     return runAgent({ agent_type: 'auto_organizer', lecture_id: lectureId });
   },
 
-  triggerStudyPlanner(): Promise<AgentJobResponse> {
-    return runAgent({ agent_type: 'study_planner' });
+  triggerStudyPlanner(config: StudyPlannerConfig): Promise<AgentJobResponse> {
+    return runAgent({
+      agent_type: 'study_planner',
+      study_planner_config: {
+        course_id: config.courseId,
+        lecture_ids: config.lectureIds,
+        materials: {
+          summary: config.materials.summary,
+          cornell_notes: config.materials.cornellNotes,
+          flashcards: config.materials.flashcards,
+          quiz: config.materials.quiz,
+        },
+      },
+    });
   },
 
   triggerResearchAgent(lectureId: string): Promise<AgentJobResponse> {

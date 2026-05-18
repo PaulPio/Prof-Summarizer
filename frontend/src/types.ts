@@ -113,6 +113,18 @@ export interface UserSettings {
   updatedAt: string;
 }
 
+/** Input for the study planner agent — one course folder at a time. */
+export interface StudyPlannerConfig {
+  courseId: string;
+  lectureIds: string[];
+  materials: {
+    summary: boolean;
+    cornellNotes: boolean;
+    flashcards: boolean;
+    quiz: boolean;
+  };
+}
+
 export interface ApiError {
   error: string;
   code: string;
