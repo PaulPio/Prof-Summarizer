@@ -2,73 +2,210 @@
 
 Visual and interaction standards for **ProfSummarizer**. Agents and contributors should match these patterns before adding or changing UI.
 
-**Design direction:** **Warm Campus** — editorial serif headlines, cream paper backgrounds, stone neutrals, and amber accents. Feels like a calm study library, not a generic SaaS dashboard.
+**Design direction:** **Studio** — neutral academic workspace. Clean, focused, typographically expressive. Indigo accent on a near-white neutral ground. Feels like a well-lit library reading room, not a colorful SaaS dashboard.
 
-**Implementation:** Tailwind CSS via CDN (`frontend/index.html`). No separate design-token build — use Tailwind utility classes consistently.
+**Implementation:** CSS custom properties token system inlined in `frontend/index.html` (see Step 1 below), plus Tailwind CDN for utility classes where needed. The token system is the source of truth for color, spacing, and shape — Tailwind classes should only be used for layout utilities not covered by tokens.
 
-**Mockups:** `design-explorations/` — **Landing C** (`landing-c-campus.html`) and **Interior C** (`interior-campus-c-split.html`) are the accepted references.
+**Mockups:** `design-explorations/proffusmarizer-zip/ProfSummarizer Studio.html` is the primary reference. Open it in a browser — it is a self-contained live prototype with all screens.
 
-**Reference components (campus-aligned):** `AuthForm`, `App.tsx`, `CourseRail`, `LectureListPanel`, `CourseFolderLabel`, `StudyDeskDashboard`, `RecordPage`, `LectureDetailPage`, `StudyModePanel`, `CornellNotesDisplay`, `FlashcardDeck`, `ChatWindow`, `StudyPlannerView`.
+**Reference components (Studio-aligned):** `TopBar`, `CourseRail`, `RecordPage` (dashboard + recording + review), `LectureDetailPage` (Document variant), `SettingsPage` (side-nav), `StudyPlannerView`, `StudyPlanDisplay`.
 
-**Legacy (still gray/blue — migrate when touched):** `SettingsPage`, `OnboardingPage`, `Quiz.tsx`, `CourseManager` modal, `HistorySidebar` (unused in shell).
+**Legacy (migrate when touched):** `OnboardingPage`, `Quiz.tsx`, `CourseManager` modal, `AuthForm` (still uses gray/blue or stone tokens).
 
 ---
 
 ## Brand & personality
 
-ProfSummarizer should feel like a **focused academic workspace** — warm, readable, and unhurried.
+ProfSummarizer should feel like a **focused academic workspace** — precise, readable, and calm.
 
 | Trait | Expression |
 |--------|------------|
-| **Editorial** | DM Serif Display for brand, course names, and hero headlines (`font-serif`, often `italic`) |
-| **Calm** | Cream page (`#faf8f5`), white cards, stone borders — avoid loud gradients on shell surfaces |
-| **Confident** | Amber-800 primary CTAs, clear hierarchy, generous whitespace |
-| **Student-first** | Large tap targets, readable body copy, course-scoped navigation |
+| **Editorial** | Instrument Serif (italic) for display headlines, lecture titles, hero text |
+| **Clean** | Near-white page (`#fafaf9`), white elevated cards, subtle borders — no loud gradients on shell |
+| **Confident** | Indigo (`#5b5bd6`) primary CTAs, clear type hierarchy, measured whitespace |
+| **Student-first** | Adequate tap targets, readable body copy, course-scoped navigation |
 
-**Voice (UI copy):** Short, direct, encouraging. Prefer “New capture” over “Initiate capture session.” Use sentence case for headings; reserve `uppercase tracking-wider` for small labels (e.g. “Courses”, “Dashboard”).
+**Voice (UI copy):** Short, direct, encouraging. "Start recording" over "Initiate capture session." Sentence case for headings; `UPPERCASE tracking-wider` for micro-labels only (e.g., "COURSES", "CAPTURE").
 
 ---
 
-## Color system
+## Token system
 
-### Core palette (Warm Campus)
+All values are CSS custom properties declared on `:root` in `frontend/index.html`. Use `var(--token)` — do not hardcode hex values.
 
-| Role | Tailwind / value | Hex (approx.) | Usage |
-|------|------------------|---------------|--------|
-| Page background | `bg-[#faf8f5]` | `#faf8f5` | App shell, auth, loading |
-| Surface | `bg-white` | `#ffffff` | Cards, lecture panel, header |
-| Surface muted | `bg-stone-50`, `bg-stone-100/60` | — | Course rail, inputs, cues column |
-| Text primary | `text-stone-900` | `#1c1917` | Headings, lecture titles |
-| Text secondary | `text-stone-600` / `text-stone-700` | — | Descriptions, body |
-| Text muted | `text-stone-400` / `text-stone-500` | — | Hints, metadata, footer |
-| Primary action | `bg-amber-800` → `hover:bg-amber-900` | `#92400e` | Main CTAs, “New capture”, generate buttons |
-| Primary on-dark | `text-amber-50`, `text-amber-200/90` | — | Text on amber gradient headers |
-| Primary tint | `bg-amber-50`, `border-amber-100` / `border-amber-200` | — | Active lecture row, info panels |
-| Accent label | `text-amber-800` | — | Section kicker (“Dashboard · COP 3520”) |
-| Destructive | `text-red-500` / `bg-red-50` / `border-red-200` | — | Errors, delete |
-| Success | `bg-green-50` / `text-green-700` | — | Saved settings, quiz correct |
-| Strong neutral CTA | `bg-stone-900` → `hover:bg-stone-800` | — | Print, export, stop recording |
+### Color tokens
 
-**Do not** use `bg-blue-600` or purple/indigo gradients on new campus surfaces. Legacy pages may still use blue until migrated.
+| Token | Light value | Purpose |
+|-------|-------------|---------|
+| `--bg` | `#fafaf9` | App shell, auth, page backgrounds |
+| `--bg-elev` | `#ffffff` | Cards, panels, elevated surfaces |
+| `--bg-sunken` | `#f4f4f3` | Course rail, input backgrounds, table headers |
+| `--bg-hover` | `#f0f0ef` | Row hover state |
+| `--bg-active` | `#e9e9e7` | Row active/pressed state |
+| `--border` | `#e7e5e4` | Standard borders |
+| `--border-strong` | `#d6d3d1` | Emphasized borders, dividers |
+| `--border-subtle` | `#efeeec` | Table row separators |
+| `--text` | `#0c0a09` | Primary text |
+| `--text-muted` | `#57534e` | Descriptions, body copy |
+| `--text-soft` | `#a8a29e` | Hints, metadata, labels |
+| `--text-faint` | `#d6d3d1` | Placeholder text, empty states |
 
-### Feature headers (in-context only)
+### Brand tokens
 
-Use the **amber gradient bar** for feature cards — not purple/indigo:
+| Token | Value | Purpose |
+|-------|-------|---------|
+| `--accent` | `#5b5bd6` | Primary CTA, links, active indicators |
+| `--accent-hover` | `#4d4dc4` | Hover state for accent elements |
+| `--accent-soft` | `#eeeefb` | Accent tint backgrounds |
+| `--accent-text` | `#4338ca` | Text on accent-soft backgrounds |
 
-```html
-class="bg-gradient-to-r from-amber-900 to-amber-800 text-amber-50"
+### Signal tokens
+
+| Token | Value | Purpose |
+|-------|-------|---------|
+| `--rec` | `#d4f000` | Recording active indicator (lime) |
+| `--rec-deep` | `#708500` | Dark lime for waveform accent bar |
+| `--confuse` | `#f59e0b` | Confusion markers, attention (amber) |
+| `--confuse-soft` | `#fef3c7` | Confusion flag backgrounds |
+| `--good` | `#16a34a` | Success, quiz correct, high score |
+| `--good-soft` | `#dcfce7` | Success backgrounds |
+| `--bad` | `#dc2626` | Error, quiz wrong, low score |
+| `--bad-soft` | `#fee2e2` | Error backgrounds |
+
+### Dark mode
+
+All tokens are re-declared under `[data-theme="dark"]`. Apply by setting `document.documentElement.setAttribute('data-theme', 'dark')`. The token API stays identical — no component code changes needed.
+
+Dark accent: `--accent: #818cf8` (lighter indigo for contrast on dark bg).
+
+### Density
+
+Two density modes are supported via `[data-density="cozy"]` on `<html>`:
+
+- **Compact** (default): `--row-h: 28px`, `--pad-card: 16px`, `--text-base: 13px`, `--text-display: 44px`
+- **Cozy**: `--row-h: 36px`, `--pad-card: 22px`, `--text-base: 14px`, `--text-display: 56px`
+
+All spacing uses `--space-1` through `--space-8` tokens that scale with density.
+
+---
+
+## Typography
+
+**Fonts** (loaded via Google Fonts in `frontend/index.html`):
+
+| Family | CSS var | Use |
+|--------|---------|-----|
+| **Geist** | `var(--font-ui)` | All UI text, buttons, labels, body |
+| **Geist Mono** | `var(--font-mono)` | Timestamps, durations, code, mono values |
+| **Instrument Serif** | `var(--font-serif)` | Display headlines, lecture titles, hero h1 |
+
+| Element | Style | Notes |
+|---------|-------|-------|
+| Brand mark | `font-family: var(--font-ui); font-size: 14px; font-weight: 600` | CourseRail top |
+| Hero / page title | `font-family: var(--font-serif); font-size: var(--text-display); font-style: italic; font-weight: 400` | Dashboard "Welcome back", lecture h1 |
+| Section label (micro) | `font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-soft)` | "COURSES", "CAPTURE" |
+| Section heading | `font-size: 13px; font-weight: 600` | Card/section titles |
+| Body | `font-size: var(--text-base); color: var(--text-muted); line-height: 1.6` | Descriptions, notes |
+| Mono value | `font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted)` | Durations, timestamps |
+| Timer | `font-family: var(--font-mono); font-size: 96px; font-weight: 300` | Live recording timer |
+
+---
+
+## Layout & shell
+
+### App shell — Studio (2-column)
+
+```
+┌──────────┬──────────────────────────────────────────────────┐
+│ Course   │  TopBar (48px, per-page)                         │
+│ rail     ├──────────────────────────────────────────────────┤
+│ 248px    │  Main content (flex: 1, overflow: auto)          │
+│ fixed    │  Dashboard / Record / Lecture / Planner /        │
+│          │  Settings                                        │
+└──────────┴──────────────────────────────────────────────────┘
 ```
 
-| Feature | Pattern | Components |
-|---------|---------|------------|
-| **Study Mode** | Amber gradient header; tabs `border-amber-800` / `bg-amber-50/50` | `StudyModePanel` |
-| **Cornell Notes** | Same amber header; cues `bg-stone-50`, cue borders `border-amber-200` | `CornellNotesDisplay` |
-| **Flashcards** | White cards, `border-amber-200`, progress `bg-amber-700` | `FlashcardDeck` |
-| **Ask Professor** | Amber gradient modal header; user bubbles `bg-amber-800` | `ChatWindow` |
-| **Recording** | `red-50`, `red-600`, `ring-red-100` | Active recorder UI (unchanged) |
-| **Confusion marker** | `amber-500` FAB | `ConfusionButton` only |
+- Root: `display: flex; height: 100vh; width: 100vw; overflow: hidden; background: var(--bg); color: var(--text)`
+- **CourseRail:** `width: 248px; flex-shrink: 0; background: var(--bg-sunken); border-right: 1px solid var(--border)`
+- **No standalone header or footer** — each page owns its own `TopBar`
+- **TopBar:** `height: 48px; border-bottom: 1px solid var(--border); background: var(--bg); padding: 0 16px`; breadcrumb on left, actions on right
+- Main content: `flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden`
 
-### Course colors
+### Shape tokens
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `--r-sm` | `6px` | Buttons, small controls |
+| `--r` | `10px` | Input fields, chips |
+| `--r-lg` | `14px` | Cards, panels |
+| `--r-xl` | `20px` | Large modals, overlays |
+
+### Shadows
+
+| Token | Use |
+|-------|-----|
+| `var(--shadow-sm)` | Active nav items, tight surfaces |
+| `var(--shadow)` | Cards, dropdowns |
+| `var(--shadow-lg)` | Modals, popovers |
+| `var(--shadow-pop)` | Full-screen overlays |
+
+---
+
+## Primitive CSS classes
+
+The following classes are declared in `frontend/index.html` and should be used instead of one-off inline styles for common patterns:
+
+### Buttons
+
+```html
+<!-- Default button -->
+<button class="btn">Label</button>
+
+<!-- Dark/filled primary -->
+<button class="btn btn-primary">Label</button>
+
+<!-- Indigo accent -->
+<button class="btn btn-accent">Label</button>
+
+<!-- Ghost (no background/border) -->
+<button class="btn btn-ghost">Label</button>
+
+<!-- Square icon button -->
+<button class="icon-btn"><svg /></button>
+```
+
+`btn` base: `display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--r-sm); border: 1px solid var(--border); font-size: var(--text-sm); font-weight: 500; cursor: pointer`
+
+### Cards
+
+```html
+<div class="card">…</div>
+```
+
+`card`: `background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--pad-card)`
+
+### Chips
+
+```html
+<span class="chip">Label</span>
+```
+
+`chip`: `display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; background: var(--bg-sunken); border: 1px solid var(--border); font-size: var(--text-xs); font-weight: 500`
+
+### Keyboard keys
+
+```html
+<kbd class="kbd">⌘K</kbd>
+```
+
+### Utility classes
+
+- `.mono` — applies `font-family: var(--font-mono)` + `font-feature-settings: 'tnum'`
+- `.serif` — applies `font-family: var(--font-serif)`
+
+---
+
+## Course colors
 
 Defined in `frontend/src/constants/courseColors.ts`:
 
@@ -77,276 +214,125 @@ Defined in `frontend/src/constants/courseColors.ts`:
 #166534  #1e3a5f  #6b21a8  #9f1239
 ```
 
-- Use via **`displayCourseColor(stored)`** when rendering bars, borders, and badges (maps legacy bright indigo `#6366f1` → campus amber without changing the DB).
-- **Course rail:** full-width color bar (`h-1 rounded-full`) + `border-l-4` when active.
-- **Course folder label:** `CourseFolderLabel` — serif name + color bar + optional subtitle.
-- **Lecture list:** active row `bg-amber-50/80` with left border = `displayCourseColor(course.color)`.
-- Do **not** use course colors for global primary buttons.
-
-### Status indicators (footer / shell)
-
-| State | Dot color |
-|-------|-----------|
-| Guest | `bg-amber-500` |
-| Signed in | `bg-green-500` |
-
----
-
-## Typography
-
-**Fonts** (loaded in `frontend/index.html`):
-
-| Family | CSS | Use |
-|--------|-----|-----|
-| **DM Serif Display** | `.font-serif` / `font-serif` | Brand (“ProfSummarizer”), course names, hero headlines, flashcard terms |
-| **Inter** | `body` default | UI, buttons, forms, metadata |
-
-| Element | Classes | Notes |
-|---------|---------|-------|
-| Brand mark | `font-serif text-xl italic text-stone-800` | Header logo |
-| Hero / page title | `font-serif text-4xl`–`text-6xl` `text-stone-900` | Auth, study desk |
-| Course title | `font-serif text-lg` / `text-base` `leading-tight truncate` | Rail, `CourseFolderLabel` |
-| Section kicker | `text-xs font-semibold uppercase tracking-wide text-amber-800` | “Dashboard · …” |
-| Section title | `text-lg`–`text-2xl` `font-bold` `text-stone-900` | Cards, panels |
-| Small label | `text-[10px]`–`text-xs` `font-bold` `uppercase` `tracking-wider` `text-stone-400` | “Courses”, form sections |
-| Body | `text-sm`–`text-base` `leading-relaxed` `text-stone-600` | Descriptions, notes |
-| Timer / mono | `font-mono` `font-bold` | Recording duration |
-
-**Weight hierarchy:** `font-bold` / `font-semibold` for UI emphasis; serif carries display weight without `font-black` on marketing blocks.
-
----
-
-## Layout & spacing
-
-### App shell — Interior C (split workspace)
-
-```
-┌──────────┬────────────┬─────────────────────────────────────┐
-│ Course   │  Lecture   │  Header (sticky, h-16)               │
-│ rail     │  list      ├─────────────────────────────────────┤
-│ w-56     │  w-64–72   │  Main content (scroll)               │
-│ (lg+)    │  (+mobile  │  Record / Study desk / Lecture detail │
-│          │   drawer)  │                                      │
-└──────────┴────────────┴─────────────────────────────────────┘
-```
-
-- Root: `flex h-screen bg-[#faf8f5] text-stone-900 overflow-hidden`
-- **CourseRail:** `w-56`, `bg-stone-100/60`, `border-r`, hidden below `lg`
-- **LectureListPanel:** `w-64 md:w-72`, white, `border-r`; mobile overlay via `isSidebarOpen`
-- **Header:** `bg-white/90 backdrop-blur border-b border-stone-200`; brand + active course dot/name; “New capture” amber CTA
-- Main padding: `p-4 sm:p-6 md:p-12` on content pages
-- Max content width: `max-w-2xl` (study desk) or `max-w-4xl` (lecture detail)
-
-### Border radius scale
-
-| Token | Class | Use |
-|-------|-------|-----|
-| Control | `rounded-lg` / `rounded-xl` | Inputs, list items, tabs |
-| Button | `rounded-xl` | CTAs |
-| Card | `rounded-2xl` | Standard panels |
-| Pill | `rounded-full` | Course badge, toggles, confusion FAB |
-
-### Shadows
-
-| Class | Use |
-|-------|-----|
-| `shadow-sm` | Cards, lecture panel |
-| `shadow-md` | Flashcard flip |
-| `shadow-2xl` | Chat modal |
+- Use via **`displayCourseColor(stored)`** when rendering color dots, badges, and borders.
+- **Course rail:** 8×8px colored square dot (`border-radius: 2px`) + course name
+- **Lecture table:** course chip = color dot + code text
+- Do **not** use raw course colors for global primary buttons.
 
 ---
 
 ## Components
 
-### Buttons
+### TopBar
 
-**Primary (campus)**
-
-```html
-class="px-4 py-2 bg-amber-800 text-amber-50 rounded-lg text-sm font-semibold hover:bg-amber-900 transition-colors"
+```tsx
+<TopBar breadcrumb={<>…</>}>
+  <button className="btn">Action</button>
+  <button className="btn btn-accent">Primary</button>
+</TopBar>
 ```
 
-**Primary (large CTA)**
+Breadcrumb renders as a row of text nodes + chevron icons. Use `var(--text-soft)` for parent segments, `var(--text)` for current page segment.
 
-```html
-class="px-7 py-3.5 bg-amber-800 text-amber-50 rounded-xl font-semibold shadow-md hover:bg-amber-900"
+### CourseRail sections
+
+1. **Brand row**: logo mark + "ProfSummarizer" (`font-weight: 600`) + "Studio · v3" (`font-size: 10px; color: var(--text-faint)`)
+2. **Search**: static box with ⌘K badge (visual only until command palette is wired)
+3. **Nav items**: icon + label, 32px height, `border-radius: var(--r-sm)`. Active state: `background: var(--bg-elev); border: 1px solid var(--border); box-shadow: var(--shadow-sm)`
+4. **Courses section**: "COURSES" micro-label + `+` icon-button. Course rows: color dot + name + code (mono 10px) + lecture count
+5. **User footer**: initials avatar (gradient circle) + name + plan + settings gear → `/settings`
+
+### Lecture table rows
+
+- Columns: Lecture (40%) | Course (15%) | Captured (11%) | Duration (10%) | Cards (10%) | Quiz (14%)
+- Row hover: `background: var(--bg-hover)`
+- Quiz pill: green (`var(--good)`) ≥80%, amber (`var(--confuse)`) ≥60%, red (`var(--bad)`) <60%
+- Confusion chip: `background: var(--confuse-soft); color: var(--confuse)`
+
+### Stat cards
+
+```
+label (11px, --text-soft)
+large number (28px, font-weight: 500, color: accent or signal)
+sub text (11px, --text-soft)
+optional progress bar (3px, --bg-sunken track, accent fill)
 ```
 
-**Secondary (outline)**
+### Forms
 
 ```html
-class="px-7 py-3.5 border border-stone-300 rounded-xl font-semibold text-stone-700 bg-white hover:bg-stone-50"
+<input style="border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px 10px;
+              background: var(--bg); color: var(--text); font-size: var(--text-sm)" />
 ```
 
-**Strong neutral**
-
-```html
-class="px-4 py-2 bg-stone-900 text-stone-50 rounded-lg text-sm font-semibold hover:bg-stone-800"
-```
-
-**Ghost / text**
-
-```html
-class="text-sm font-semibold text-stone-500 hover:text-stone-700"
-```
-
-**Icon button (header)**
-
-```html
-class="p-2 hover:bg-stone-100 rounded-lg text-stone-600 transition-colors"
-```
-
-### Cards
-
-**Standard panel**
-
-```html
-class="bg-white rounded-2xl border border-stone-200 shadow-sm p-6"
-```
-
-**Feature card (with header)**
-
-```html
-class="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden"
-<!-- header --> class="bg-gradient-to-r from-amber-900 to-amber-800 px-6 py-4"
-```
-
-### Tabs
-
-**Campus underline (study mode)**
-
-```html
-class="text-amber-900 border-b-2 border-amber-800 bg-amber-50/50"   <!-- active -->
-class="text-stone-500 hover:text-stone-700 hover:bg-stone-50"       <!-- inactive -->
-```
-
-**Notes toggle (lecture detail)**
-
-```html
-class="flex gap-2 bg-stone-100 rounded-full p-1 border border-stone-200"
-<!-- active segment --> class="bg-white shadow-sm text-stone-900"
-```
-
-### Form controls
-
-```html
-class="text-sm border border-stone-200 rounded-lg px-3 py-2 bg-stone-50 focus:outline-none focus:ring-2 focus:ring-amber-800/25 focus:border-amber-300"
-```
+Focus: `outline: 2px solid var(--accent); outline-offset: 2px`
 
 ### Alerts
 
 | Type | Pattern |
 |------|---------|
-| Error | `bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm` |
-| Success | `bg-green-50 border border-green-200 rounded-xl text-green-700` |
-| Warning / busy | `bg-amber-50 border border-amber-100 rounded-xl text-amber-900` |
-| Info | `bg-amber-50 border border-amber-200 rounded-xl text-amber-900` |
+| Error | `background: var(--bad-soft); border: 1px solid var(--bad); color: var(--bad)` |
+| Success | `background: var(--good-soft); border: 1px solid var(--good); color: var(--good)` |
+| Warning | `background: var(--confuse-soft); border: 1px solid var(--confuse); color: var(--confuse)` |
+| Info | `background: var(--accent-soft); border: 1px solid var(--accent); color: var(--accent-text)` |
 
 ### Loading
 
-**Spinner (campus)**
-
 ```html
-class="w-12 h-12 border-4 border-amber-800 border-t-transparent rounded-full animate-spin"
+<div style="width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: var(--accent);
+            border-radius: 50%; animation: spin 700ms linear infinite" />
 ```
 
 ### Empty states
 
-Centered stack: icon circle (`bg-amber-50` or `bg-stone-100 rounded-full`) → `font-bold text-stone-900` title → `text-stone-600 text-sm` description → amber primary CTA.
-
-### Course folder label
-
-Use `CourseFolderLabel` for consistent course titles:
-
-- Color bar: `h-1 rounded-full` with `displayCourseColor(color)`
-- Name: `font-serif text-stone-900 truncate`
-- Subtitle: `text-xs text-stone-500` (lecture count)
-
-### Lecture list row
-
-- Default: `rounded-xl hover:bg-stone-50 border-l-4 border-transparent`
-- Active: `bg-amber-50/80` + `borderLeftColor: displayCourseColor(course.color)`
-- Delete: `hidden group-hover:block` → `hover:text-red-500`
+Centered stack: icon in `background: var(--bg-sunken); border-radius: var(--r-lg)` circle → `font-weight: 600` title → `color: var(--text-muted)` description → accent CTA button.
 
 ---
 
 ## Motion & animation
 
-| Pattern | Class | Use |
-|---------|-------|-----|
-| Recording pulse | `animate-pulse` | Live recorder |
-| Button | `transition-colors` | Most interactives |
-| Progress | `transition-all duration-300` | Flashcard bar |
-| Chat typing | `animate-bounce` on amber dots | `ChatWindow` |
+| Animation | Keyframe name | Use |
+|-----------|--------------|-----|
+| Fade in | `fade-in` | Page sections, panels appearing |
+| Recording pulse | `rec-pulse` | Live recording dot |
+| Spin | `spin` | Loading spinners |
+| Waveform | `wave` | Audio waveform bars |
 
-Prefer **CSS transitions** over heavy JS animation. Respect `prefers-reduced-motion` when adding large motion.
-
----
-
-## Icons & emoji
-
-- **Study / feature:** Emoji in headers (🎓 🎙️ 🎴 📝) at modest sizes
-- **UI icons:** Heroicons-style SVG, `stroke="currentColor"`, `w-5 h-5`
-- Avoid icon-only buttons without `aria-label` on mobile
-
----
-
-## Responsive behavior
-
-Breakpoints: Tailwind defaults (`sm` 640px, `md` 768px, `lg` 1024px).
-
-| Pattern | Mobile | Desktop |
-|---------|--------|---------|
-| Course rail | Hidden | Fixed `lg:flex` column |
-| Lecture list | Drawer overlay + backdrop | Fixed column |
-| Course filter | `<select>` in lecture panel | `CourseFolderLabel` block |
-| Header CTA | “New capture” visible | Same |
-| Study tab labels | Icon optional | Icon + label |
-
-Touch targets: minimum **44px** on primary buttons.
-
----
-
-## Accessibility
-
-- Semantic HTML (`button`, `nav`, `main`, headings in order).
-- Visible labels or `aria-label` on icon-only controls.
-- Focus: `focus:ring-2 focus:ring-amber-800/25` on inputs.
-- Status: pair dots with text (“Guest Mode”).
-- Contrast: `text-stone-500` for metadata only, not critical small text on cream.
+All declared in `frontend/index.html`. Use `animation: fade-in 200ms ease-out both` on new panels.
+Prefer CSS transitions (`transition: background 80ms ease`) over JS-driven animation for hover/active states.
 
 ---
 
 ## Page-specific guidance
 
-### Auth (Landing C)
-
-- Full-page cream; serif hero; amber primary + white outline secondary.
-- Feature grid `01` / `02` / `03` with faded serif numerals (`text-amber-800/30`).
-- Footer: `bg-stone-900 text-stone-300`.
-
 ### Record flow
 
 | State | Visual |
 |-------|--------|
-| IDLE | `StudyDeskDashboard` — serif “Your study desk”, amber Record/Upload |
-| RECORDING | Red accent, stone-900 stop, amber confusion FAB |
-| REVIEWING / pipeline | Campus spinners (`border-amber-800`) |
-| ERROR | White card, red message, stone-900 back |
+| IDLE / COMPLETED | Studio Dashboard — stats strip + continue card + lecture table |
+| SETUP | Centered card with RecordRows (Course/Source/OnStop/Confusion) + dark "Start recording" btn |
+| RECORDING | TopBar rec dot + timer chip; left=mono timer + waveform; right=transcript ribbon; confusion ring (lime, bottom-right) |
+| REVIEWING | TopBar Discard/Save/Process; pipeline chips; 2×2 toggle grid; confusion timeline |
+| ERROR | `.card` with `color: var(--bad)` message + back button |
 
-### Lecture detail
+### Lecture detail (Document variant)
 
-- Course badge: white pill + color dot + name (`displayCourseColor`).
-- Cornell / summary toggle: stone pill segment control.
-- Study Mode, Cornell, Chat: amber gradient headers — **no** purple duplication on the same view.
+- Two-column: article (1fr) + right rail (220px sticky)
+- Article: eyebrow in `var(--accent)`, h1 in `var(--font-serif)` italic 56px, sections with `font-weight: 600` heading
+- Right rail: "On this page" outline with active `border-left: 2px solid var(--accent)`, "Your flags" with `var(--confuse-soft)` background
+- Floating "Ask Professor" pill: `background: var(--text); color: var(--bg)`, `bottom: 22px; right: 22px`
+
+### Settings (side-nav)
+
+- Left nav: 220px, `border-right: 1px solid var(--border)`, groups in `font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-soft)`
+- Active section: `background: var(--bg-sunken); border-radius: var(--r-sm); color: var(--text); font-weight: 500`
+- Content area: `max-width: 720px; padding: 32px 36px`
 
 ### Study planner
 
-- Campus cards and amber CTAs; course folder step + lecture checkboxes scoped to `course_id`.
-
-### Settings & onboarding (legacy)
-
-- Still uses `gray-*` and `blue-600` in places — **new work in these files should use campus tokens** when editing.
+- Setup wizard: 4 steps in shared card — progress via step counter
+- Course step: 2×2 grid of course cards with color dot + name + code + count
+- Output: emphasis stacked bar + sessions column grid
 
 ---
 
@@ -354,20 +340,21 @@ Touch targets: minimum **44px** on primary buttons.
 
 ### Do
 
-- Use cream `#faf8f5`, stone neutrals, and `amber-800` for primary actions on campus surfaces.
-- Use `font-serif` for brand, courses, and display headlines.
-- Use `CourseFolderLabel` and `displayCourseColor()` for course UI.
-- Keep one obvious primary CTA per view (usually amber).
-- Match `design-explorations/landing-c-campus.html` and `interior-campus-c-split.html` for new layout work.
-- Test at `sm`, `md`, and `lg` for any shell change.
+- Use `var(--accent)` for primary CTAs and active indicators.
+- Use `var(--font-serif)` + `font-style: italic` for display headlines and lecture titles.
+- Use `.card`, `.btn`, `.chip` primitive classes for consistent surfaces.
+- Use `displayCourseColor()` for all course color rendering.
+- Apply `var(--bg-sunken)` for rail/sidebar/sunken backgrounds; `var(--bg-elev)` for elevated cards.
+- Keep one obvious primary CTA per view (usually `.btn-accent`).
+- Test dark mode by temporarily adding `data-theme="dark"` to `<html>`.
 
 ### Don't
 
-- Add `bg-blue-600`, `indigo-*`, or purple gradients to shell, auth, rail, lecture list, study mode, Cornell, flashcards, or chat.
-- Use `font-black` + blue shadows on marketing blocks (old Classic theme).
-- Use bright course colors (`#6366f1`) without `displayCourseColor()` in UI.
+- Hardcode hex colors — always use CSS custom property tokens.
+- Use `amber-800`, `bg-[#faf8f5]`, DM Serif Display, or `stone-*` on new Studio surfaces.
+- Add purple/indigo gradients (the flat `--accent` token is sufficient).
+- Use bright raw course colors (`#6366f1`) without `displayCourseColor()`.
 - Introduce a second CSS framework without a project-wide migration.
-- Add dark mode without a coordinated pass (app is warm-light first).
 
 ---
 
@@ -375,9 +362,14 @@ Touch targets: minimum **44px** on primary buttons.
 
 | Area | Status |
 |------|--------|
-| Auth, shell, course rail, lecture list, study desk | Campus ✅ |
-| Lecture detail, Cornell, study mode, flashcards, chat, planner | Campus ✅ |
-| Settings, onboarding, quiz UI, course create modal | Legacy blue/gray — migrate when touched |
+| App shell, CourseRail | Studio ✅ |
+| RecordPage (dashboard + recording + review) | Studio ✅ |
+| LectureDetailPage (Document variant) | Studio ✅ |
+| SettingsPage (side-nav) | Studio ✅ |
+| StudyPlannerView + StudyPlanDisplay | Studio ✅ |
+| TopBar component | Studio ✅ |
+| OnboardingPage, AuthForm | Legacy — migrate when touched |
+| Quiz.tsx, CourseManager modal | Legacy — migrate when touched |
 | `HistorySidebar` | Unused; do not extend |
 
 ---
@@ -386,13 +378,12 @@ Touch targets: minimum **44px** on primary buttons.
 
 Before marking UI work complete:
 
-- [ ] Matches Interior C shell (course rail + lecture list + main) when inside the app
-- [ ] Uses Inter + DM Serif + cream/stone/amber palette
-- [ ] Primary action is amber-800 (or stone-900 for neutral destructive/print)
-- [ ] Course colors via `displayCourseColor()` and `CourseFolderLabel` where applicable
-- [ ] Loading, error, and empty states defined
-- [ ] Responsive at mobile, tablet, and desktop
-- [ ] No new blue/purple on campus surfaces
+- [ ] Uses `var(--bg)` / `var(--bg-elev)` / `var(--bg-sunken)` for backgrounds — no hardcoded hex
+- [ ] Primary action uses `.btn-accent` (indigo) or `.btn-primary` (dark)
+- [ ] Display text uses `var(--font-serif)` italic where appropriate
+- [ ] Course colors rendered via `displayCourseColor()`
+- [ ] Loading, error, and empty states defined using signal tokens
+- [ ] Dark mode compatible (use tokens, not hardcoded values)
 - [ ] `npm run build` passes from `frontend/`
 
 ---
@@ -402,7 +393,9 @@ Before marking UI work complete:
 | File | Purpose |
 |------|---------|
 | `AGENTS.md` | Architecture, commands, agent rules |
+| `CLAUDE.md` | Developer commands, architecture overview |
 | `PROMPT.md` | Session system prompt |
-| `design-explorations/index.html` | Mockup index (Landing C + Interior options) |
-| `frontend/index.html` | Fonts, cream body, scrollbar, Tailwind CDN |
+| `design-explorations/proffusmarizer-zip/ProfSummarizer Studio.html` | Live design prototype (primary reference) |
+| `design-explorations/proffusmarizer-zip/tokens.css` | Token source definitions |
+| `frontend/index.html` | Fonts, token system, primitive classes |
 | `frontend/src/constants/courseColors.ts` | Course palette + `displayCourseColor()` |

@@ -19,6 +19,9 @@ const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini';
 const ANTHROPIC_DEFAULT_MODEL = 'claude-sonnet-4-6';
 const OPENROUTER_DEFAULT_MODEL = 'openai/gpt-4o-mini';
 
+/** Stay under Supabase edge wall-clock (~150s) so we return a JSON error instead of HTTP 546. */
+const AI_REQUEST_TIMEOUT_MS = 110_000;
+
 const DEFAULT_MODELS: Record<AIProvider, string> = {
   gemini: GEMINI_DEFAULT_MODEL,
   openai: OPENAI_DEFAULT_MODEL,
@@ -154,6 +157,27 @@ async function decryptUserKey(
   return decryptResult as string;
 }
 
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = AI_REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(
+        `AI request timed out after ${Math.round(timeoutMs / 1000)}s. Try a faster model in Settings → AI, or fewer lectures.`,
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function callAI(
   config: AIConfig,
   systemInstruction: string,
@@ -195,7 +219,7 @@ async function callGeminiProvider(
     body.generationConfig.maxOutputTokens = options.maxOutputTokens;
   }
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -245,11 +269,19 @@ async function callOpenAIProvider(
     body.max_tokens = options.maxOutputTokens;
   }
 
+  const isOpenRouter = baseUrl.includes('openrouter.ai');
   if (options.schema) {
-    body.response_format = {
-      type: 'json_schema',
-      json_schema: { name: 'response', schema: options.schema, strict: true },
-    };
+    if (isOpenRouter) {
+      // Many OpenRouter models (e.g. experimental) hang on strict json_schema; json_object is faster.
+      body.response_format = { type: 'json_object' };
+      const schemaHint = `\n\nRespond with a single JSON object only (no markdown fences). Match this structure:\n${JSON.stringify(options.schema)}`;
+      messages[0].content = String(messages[0].content) + schemaHint;
+    } else {
+      body.response_format = {
+        type: 'json_schema',
+        json_schema: { name: 'response', schema: options.schema, strict: true },
+      };
+    }
   }
 
   const headers: Record<string, string> = {
@@ -257,14 +289,14 @@ async function callOpenAIProvider(
     Authorization: `Bearer ${config.apiKey}`,
   };
 
-  if (baseUrl.includes('openrouter.ai')) {
+  if (isOpenRouter) {
     const referer = Deno.env.get('OPENROUTER_REFERRER_ORIGIN') || Deno.env.get('ALLOWED_ORIGIN');
     if (referer) headers['HTTP-Referer'] = referer;
     const title = Deno.env.get('OPENROUTER_SITE_TITLE') || 'ProfSummarizer';
     headers['X-Title'] = title;
   }
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetchWithTimeout(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -320,7 +352,7 @@ async function callAnthropicProvider(
     body.tool_choice = { type: 'tool', name: 'structured_output' };
   }
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

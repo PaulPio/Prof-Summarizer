@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import StudyPlannerView from '../components/StudyPlannerView';
 import StudyPlanDisplay from '../components/StudyPlanDisplay';
 import { StorageService } from '../services/storageService';
 import { displayCourseColor } from '../constants/courseColors';
+import TopBar from '../components/TopBar';
 import type { SavedStudyPlan } from '../types';
 
 const StudyPlannerPage: React.FC = () => {
@@ -13,6 +14,8 @@ const StudyPlannerPage: React.FC = () => {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [planReadyBanner, setPlanReadyBanner] = useState<string | null>(null);
+  const planPanelRef = useRef<HTMLElement>(null);
 
   const loadPlans = useCallback(async () => {
     if (!user) return;
@@ -31,18 +34,15 @@ const StudyPlannerPage: React.FC = () => {
     }
   }, [user]);
 
-  useEffect(() => {
-    loadPlans();
-  }, [loadPlans]);
+  useEffect(() => { loadPlans(); }, [loadPlans]);
 
   const selectedPlan = savedPlans.find(p => p.id === selectedPlanId) ?? null;
 
   const handlePlanGenerated = (plan: SavedStudyPlan) => {
-    setSavedPlans(prev => {
-      const without = prev.filter(p => p.id !== plan.id);
-      return [plan, ...without];
-    });
+    setSavedPlans(prev => [plan, ...prev.filter(p => p.id !== plan.id)]);
     setSelectedPlanId(plan.id);
+    setPlanReadyBanner(plan.title);
+    window.setTimeout(() => planPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   };
 
   const handleDelete = async (planId: string) => {
@@ -53,9 +53,7 @@ const StudyPlannerPage: React.FC = () => {
       await StorageService.deleteStudyPlan(user.id, planId);
       setSavedPlans(prev => {
         const next = prev.filter(p => p.id !== planId);
-        if (selectedPlanId === planId) {
-          setSelectedPlanId(next[0]?.id ?? null);
-        }
+        if (selectedPlanId === planId) setSelectedPlanId(next[0]?.id ?? null);
         return next;
       });
     } catch (err) {
@@ -67,103 +65,119 @@ const StudyPlannerPage: React.FC = () => {
 
   if (!userSettings?.agentStudyPlanner) {
     return (
-      <div className="max-w-lg mx-auto p-6 sm:p-12">
-        <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Study planner</p>
-        <h1 className="font-serif text-3xl text-stone-900 mt-2">Turn on the study planner</h1>
-        <p className="text-stone-600 mt-3 text-sm leading-relaxed">
-          Enable the Study Planner agent in Settings to build prioritized review plans for each course folder.
-        </p>
-        <Link
-          to="/settings?tab=agents"
-          className="inline-flex mt-6 px-5 py-2.5 bg-amber-800 text-amber-50 rounded-xl text-sm font-semibold hover:bg-amber-900"
-        >
-          Open Settings → Agents
-        </Link>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <TopBar breadcrumb={<span style={{ fontSize: 12, fontWeight: 500 }}>Study planner</span>} />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
+          <div style={{ maxWidth: 400, textAlign: 'center' }}>
+            <div style={{ fontSize: 36, marginBottom: 16 }}>📋</div>
+            <h2 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 8px' }}>Turn on the study planner</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: '0 0 20px', lineHeight: 1.6 }}>
+              Enable the Study Planner agent in Settings to build prioritized review plans for each course folder.
+            </p>
+            <Link to="/settings?tab=agents" className="btn btn-accent">
+              Open Settings → Agents
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 sm:p-6 md:p-10 space-y-8">
-      <header>
-        <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Study planner</p>
-        <h1 className="font-serif text-3xl sm:text-4xl text-stone-900 mt-1">Your study plans</h1>
-        <p className="text-sm text-stone-600 mt-2 max-w-2xl">
-          Saved plans for one course at a time. Generate a new plan below or open a saved one from the list.
-        </p>
-      </header>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <TopBar
+        breadcrumb={
+          <>
+            <span style={{ color: 'var(--text-soft)', fontSize: 12 }}>Studio</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--text-faint)' }}>
+              <path d="M4.5 2.5l4 3.5-4 3.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span style={{ fontSize: 12, fontWeight: 500 }}>Study planner</span>
+          </>
+        }
+      />
 
-      <div className="grid lg:grid-cols-[minmax(240px,280px)_1fr] gap-6 items-start">
-        <aside className="space-y-3 lg:sticky lg:top-4">
-          <h2 className="text-sm font-bold text-stone-800">Saved plans</h2>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr', overflow: 'hidden' }}>
+        {/* Saved plans sidebar */}
+        <div style={{ borderRight: '1px solid var(--border)', overflowY: 'auto', background: 'var(--bg-sunken)', padding: '16px 12px' }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-soft)', marginBottom: 10, padding: '0 4px' }}>
+            Saved plans
+          </div>
           {loadingPlans ? (
-            <p className="text-sm text-stone-400 py-4">Loading…</p>
+            <div style={{ fontSize: 12, color: 'var(--text-soft)', padding: '12px 4px' }}>Loading…</div>
           ) : savedPlans.length === 0 ? (
-            <p className="text-sm text-stone-500 bg-white rounded-xl border border-stone-200 p-4">
-              No saved plans yet. Generate your first plan below.
-            </p>
+            <div style={{ fontSize: 12, color: 'var(--text-soft)', padding: '12px 4px', lineHeight: 1.5 }}>
+              No saved plans yet. Generate one to get started.
+            </div>
           ) : (
-            <ul className="space-y-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {savedPlans.map(plan => {
                 const course = courses.find(c => c.id === plan.courseId);
                 const active = plan.id === selectedPlanId;
                 return (
-                  <li key={plan.id}>
-                    <div
-                      className={`rounded-xl border transition-colors ${
-                        active
-                          ? 'bg-amber-50 border-amber-200 shadow-sm'
-                          : 'bg-white border-stone-200 hover:border-amber-100'
-                      }`}
+                  <div key={plan.id} style={{
+                    borderRadius: 'var(--r)',
+                    border: `1px solid ${active ? 'var(--accent-soft)' : 'var(--border-subtle)'}`,
+                    background: active ? 'var(--accent-soft)' : 'var(--bg-elev)',
+                    overflow: 'hidden',
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPlanId(plan.id)}
+                      style={{ width: '100%', textAlign: 'left', padding: '10px 12px', background: 'none', border: 'none', cursor: 'pointer' }}
                     >
+                      <div style={{ fontSize: 12, fontWeight: 500, color: active ? 'var(--accent-text)' : 'var(--text)', lineHeight: 1.4, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        {plan.title}
+                      </div>
+                      {course && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-soft)' }}>
+                          <span style={{ width: 6, height: 6, borderRadius: 2, background: displayCourseColor(course.color), flexShrink: 0 }} />
+                          {course.name}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 3 }}>
+                        {new Date(plan.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {' · '}{plan.plan.planItems.length} steps
+                      </div>
+                    </button>
+                    <div style={{ padding: '0 12px 8px' }}>
                       <button
                         type="button"
-                        onClick={() => setSelectedPlanId(plan.id)}
-                        className="w-full text-left p-3 pr-2"
+                        onClick={() => handleDelete(plan.id)}
+                        disabled={deletingId === plan.id}
+                        style={{ fontSize: 11, color: 'var(--bad)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: deletingId === plan.id ? 0.5 : 1 }}
                       >
-                        <p className="text-sm font-semibold text-stone-900 line-clamp-2">{plan.title}</p>
-                        {course && (
-                          <p className="text-xs text-stone-500 mt-1 flex items-center gap-1.5">
-                            <span
-                              className="w-2 h-2 rounded-full shrink-0"
-                              style={{ backgroundColor: displayCourseColor(course.color) }}
-                            />
-                            {course.name}
-                          </p>
-                        )}
-                        <p className="text-[10px] text-stone-400 mt-1">
-                          {new Date(plan.createdAt).toLocaleDateString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
-                          {' · '}
-                          {plan.plan.planItems.length} steps
-                        </p>
+                        {deletingId === plan.id ? 'Deleting…' : 'Delete'}
                       </button>
-                      <div className="px-3 pb-3 flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(plan.id)}
-                          disabled={deletingId === plan.id}
-                          className="text-xs font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
-                        >
-                          {deletingId === plan.id ? 'Deleting…' : 'Delete'}
-                        </button>
-                      </div>
                     </div>
-                  </li>
+                  </div>
                 );
               })}
-            </ul>
+            </div>
           )}
-        </aside>
+        </div>
 
-        <div className="space-y-6 min-w-0">
-          {selectedPlan && (
-            <section className="rounded-2xl border border-stone-200 bg-white p-5 sm:p-6 shadow-sm">
-              <StudyPlanDisplay plan={selectedPlan.plan} title={selectedPlan.title} />
+        {/* Main content */}
+        <div style={{ overflowY: 'auto', padding: '28px 32px' }}>
+          {planReadyBanner && (
+            <div style={{
+              marginBottom: 20, padding: '10px 14px', borderRadius: 'var(--r)',
+              background: 'var(--good-soft)', border: '1px solid var(--good)',
+              color: 'var(--good)', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <span><strong>Plan ready.</strong> Opened "{planReadyBanner}" below.</span>
+              <button type="button" onClick={() => setPlanReadyBanner(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--good)' }}>Dismiss</button>
+            </div>
+          )}
+
+          {selectedPlan ? (
+            <section ref={planPanelRef} style={{ marginBottom: 32 }}>
+              <StudyPlanDisplay plan={selectedPlan.plan} title={selectedPlan.title} createdAt={selectedPlan.createdAt} />
             </section>
+          ) : !loadingPlans && savedPlans.length === 0 && (
+            <div style={{ marginBottom: 32, padding: '24px', textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 'var(--r-lg)', color: 'var(--text-soft)', fontSize: 13 }}>
+              Your generated study guide will appear here.
+            </div>
           )}
 
           <StudyPlannerView onPlanGenerated={handlePlanGenerated} />

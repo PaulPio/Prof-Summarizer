@@ -24,7 +24,7 @@ const AgentJobStatusBar: React.FC = () => {
             {job.status === 'failed' && (
               <span className="text-red-500 flex-shrink-0">✕</span>
             )}
-            <span className="truncate">{labelFor(job.agent_type)}</span>
+            <span className="truncate">{labelFor(job)}</span>
           </div>
           {job.status !== 'running' && (
             <button
@@ -41,8 +41,23 @@ const AgentJobStatusBar: React.FC = () => {
   );
 };
 
-function labelFor(agentType: string): string {
-  switch (agentType) {
+function labelFor(job: { agent_type: string; status: string }): string {
+  if (job.status === 'completed') {
+    switch (job.agent_type) {
+      case 'auto_organizer': return 'Lecture organized';
+      case 'study_planner': return 'Study plan ready';
+      case 'research': return 'Research ready';
+      case 'pipeline': return 'Study materials ready';
+      default: return 'Done';
+    }
+  }
+  if (job.status === 'failed') {
+    switch (job.agent_type) {
+      case 'study_planner': return 'Study plan failed';
+      default: return 'Agent failed';
+    }
+  }
+  switch (job.agent_type) {
     case 'auto_organizer': return 'Auto-organizing lecture…';
     case 'study_planner': return 'Generating study plan…';
     case 'research': return 'Finding study directions…';

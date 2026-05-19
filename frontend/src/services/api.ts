@@ -20,8 +20,22 @@ export async function callEdgeFunction<T>(functionName: string, body: any): Prom
     });
 
     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || `Failed to call ${functionName}`);
+        const raw = await response.text();
+        let message = `Failed to call ${functionName}`;
+        try {
+            const parsed = JSON.parse(raw) as { error?: string; message?: string };
+            message = parsed.error || parsed.message || message;
+        } catch {
+            if (raw) message = raw.slice(0, 300);
+        }
+        if (response.status === 546) {
+            message =
+                'Study planner timed out on the server (limit ~2.5 min). Try a faster OpenRouter model (e.g. openai/gpt-4o-mini) in Settings → AI, or select fewer lectures.';
+        }
+        // #region agent log
+        fetch('http://127.0.0.1:7360/ingest/14547040-52a9-4edb-891a-185fbb602c58',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7542ea'},body:JSON.stringify({sessionId:'7542ea',location:'api.ts:callEdgeFunction',message:'edge function error',data:{functionName,status:response.status,messagePreview:message.slice(0,120)},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+        // #endregion
+        throw new Error(message);
     }
 
     return response.json();

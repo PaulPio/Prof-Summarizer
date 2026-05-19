@@ -130,10 +130,14 @@ export interface StudyPlanItem {
   lectureTitle: string;
   reason: string;
   suggestedActivities?: string[];
+  /** Specific summaries, cues, cards, or quizzes to open for this lecture. */
+  materialsToReview?: string[];
   dueDate?: string;
 }
 
 export interface StudyPlan {
+  /** Narrative study guide for the selected lectures (how to study, what to read, order). */
+  studyGuide?: string;
   planItems: StudyPlanItem[];
   knowledgeGaps: string[];
   courseName?: string;

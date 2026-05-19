@@ -421,6 +421,10 @@ export const StorageService = {
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
+    // #region agent log
+    fetch('http://127.0.0.1:7360/ingest/14547040-52a9-4edb-891a-185fbb602c58',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7542ea'},body:JSON.stringify({sessionId:'7542ea',location:'storageService.ts:listStudyPlans',message:'listStudyPlans result',data:{hasError:!!error,errorCode:(error as {code?:string})?.code,errorMessage:error?.message,rowCount:data?.length??0},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+
     if (error) throw new Error(error.message);
     return (data || []).map((row: Record<string, unknown>) => mapStudyPlanRow(row));
   },

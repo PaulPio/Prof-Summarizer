@@ -119,10 +119,12 @@ Course: "${escapeJsonString(course.name)}"
 The student selected specific lectures and asked you to plan using: ${materialHints.join(', ')}.
 
 Rules:
+- studyGuide: Write 3–5 short paragraphs as a readable study guide for the whole selection. Explain how to study this material, what order to review lectures in, and which enabled materials (summaries, Cornell notes, flashcards, quizzes) to use. Reference real concepts from the provided lecture data — do not invent topics.
 - Only reference lectureIds from the provided list. Never invent IDs.
 - All lectures belong to the same course — do not mix other courses.
 - Prioritize lectures with weak review signals (no quiz taken, no flashcards used) and older material.
 - For each plan item, suggest concrete study actions using the materials the student enabled (e.g. "Review Cornell cues", "Run flashcards", "Take the quiz").
+- materialsToReview: 2–5 short strings per plan item naming specific material to open (e.g. summary bullets, Cornell cue themes, flashcard count, quiz).
 - Cap planItems at 20.
 - knowledgeGaps are course-wide topics (not lecture IDs) the student should revisit.
 - dueDate: ISO date string within the next 7 days.`;
@@ -130,6 +132,7 @@ Rules:
   const schema = {
     type: 'object',
     properties: {
+      studyGuide: { type: 'string' },
       planItems: {
         type: 'array',
         maxItems: 20,
@@ -143,6 +146,10 @@ Rules:
               type: 'array',
               items: { type: 'string' },
             },
+            materialsToReview: {
+              type: 'array',
+              items: { type: 'string' },
+            },
             dueDate: { type: 'string' },
           },
           required: ['lectureId', 'lectureTitle', 'reason'],
@@ -150,7 +157,7 @@ Rules:
       },
       knowledgeGaps: { type: 'array', items: { type: 'string' } },
     },
-    required: ['planItems', 'knowledgeGaps'],
+    required: ['studyGuide', 'planItems', 'knowledgeGaps'],
   };
 
   const contents = [{
@@ -159,8 +166,12 @@ Rules:
     }],
   }];
 
-  const result = await callAI(aiConfig, systemInstruction, contents, { schema, maxOutputTokens: 4096 });
+  const aiStarted = Date.now();
+  console.log('[study_planner] AI call start', { provider: aiConfig.provider, model: aiConfig.model, lectureCount: lectures.length });
+  const result = await callAI(aiConfig, systemInstruction, contents, { schema, maxOutputTokens: 2048 });
+  console.log('[study_planner] AI call done', { ms: Date.now() - aiStarted, resultChars: result.length });
   const parsed = JSON.parse(result) as {
+    studyGuide?: string;
     planItems?: Array<Record<string, unknown>>;
     knowledgeGaps?: string[];
   };
