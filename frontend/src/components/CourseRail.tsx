@@ -5,6 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import CourseManager from './CourseManager';
 import { StorageService } from '../services/storageService';
 import { displayCourseColor } from '../constants/courseColors';
+import { STUDY_PLANNER_ENABLED } from '../constants/featureFlags';
 
 interface CourseRailProps {
   navigate: NavigateFunction;
@@ -129,6 +130,7 @@ const CourseRail: React.FC<CourseRailProps> = ({ navigate, onLogout }) => {
           active={activeNav === 'record'}
           onClick={() => navigate('/', { state: { openRecord: true } })}
         />
+        {STUDY_PLANNER_ENABLED && (
         <NavItem
           icon={
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -139,6 +141,7 @@ const CourseRail: React.FC<CourseRailProps> = ({ navigate, onLogout }) => {
           active={activeNav === 'planner'}
           onClick={() => navigate('/planner')}
         />
+        )}
         <NavItem
           icon={
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -230,7 +233,7 @@ const CourseRail: React.FC<CourseRailProps> = ({ navigate, onLogout }) => {
             {user?.name ?? 'Guest'}
           </div>
           <div style={{ fontSize: 10, color: 'var(--text-soft)' }}>
-            {user?.id === 'guest' ? 'Guest' : 'Free plan'}
+            {user?.id === 'guest' ? 'Guest · local only' : user?.email ?? 'Signed in'}
           </div>
         </div>
         <button
@@ -245,20 +248,18 @@ const CourseRail: React.FC<CourseRailProps> = ({ navigate, onLogout }) => {
             <path d="M10.5 6.5a4 4 0 01-.1.8l1.2.9-1 1.7-1.4-.5a4 4 0 01-1.3.8l-.2 1.5h-2l-.2-1.5a4 4 0 01-1.3-.8l-1.4.5-1-1.7 1.2-.9a4 4 0 010-1.6L2 5.4l1-1.7 1.4.5a4 4 0 011.3-.8L6 2h2l.2 1.4a4 4 0 011.3.8l1.4-.5 1 1.7-1.2.9a4 4 0 01.1.7z" />
           </svg>
         </button>
-        {user?.id === 'guest' && (
-          <button
-            type="button"
-            className="icon-btn"
-            style={{ width: 26, height: 26 }}
-            onClick={onLogout}
-            title="Sign out"
-          >
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M8.5 4.5L11 7l-2.5 2.5M11 7H5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M5 2H3a1 1 0 00-1 1v7a1 1 0 001 1h2" strokeLinecap="round" />
-            </svg>
-          </button>
-        )}
+        <button
+          type="button"
+          className="icon-btn"
+          style={{ width: 26, height: 26 }}
+          onClick={onLogout}
+          title="Sign out"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M8.5 4.5L11 7l-2.5 2.5M11 7H5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M5 2H3a1 1 0 00-1 1v7a1 1 0 001 1h2" strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
 
       {showCreate && (

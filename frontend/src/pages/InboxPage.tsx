@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import TopBar from '../components/TopBar';
+import { STUDY_PLANNER_ENABLED } from '../constants/featureFlags';
 import type { AgentJob, SavedLecture } from '../types';
 
 type FilterKind = 'all' | 'needs' | 'research' | 'study';
@@ -60,6 +61,7 @@ function jobToItem(job: AgentJob, lectures: SavedLecture[]): InboxItem | null {
 
   if (job.status === 'completed') {
     if (job.agent_type === 'study_planner') {
+      if (!STUDY_PLANNER_ENABLED) return null;
       return {
         id: job.id,
         kind: 'study-plan',

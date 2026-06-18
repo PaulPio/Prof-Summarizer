@@ -1,7 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, callGemini } from '../_shared/gemini.ts';
-import { resolveAIConfig, callAI } from '../_shared/ai-provider.ts';
+import { resolveAIConfigFromHttpRequest, aiConfigErrorResponse, callAI } from '../_shared/ai-provider.ts';
 
 function sanitizeLectureTitle(raw: unknown): string {
     if (typeof raw !== 'string') return '';
@@ -16,7 +15,8 @@ Deno.serve(async (req) => {
     }
 
     try {
-        const { transcript, files, confusionMarkers } = await req.json();
+        const body = await req.json();
+        const { transcript, files, confusionMarkers } = body;
 
         if (!transcript) {
             return new Response(
@@ -25,18 +25,7 @@ Deno.serve(async (req) => {
             );
         }
 
-        // Resolve AI config — user key or app fallback
-        const authHeader = req.headers.get('Authorization');
-        const token = authHeader?.replace('Bearer ', '') || '';
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-        const anonClient = createClient(supabaseUrl, anonKey);
-        const { data: { user } } = await anonClient.auth.getUser(token);
-        const aiConfig = user ? await resolveAIConfig(user.id) : {
-            provider: 'gemini' as const,
-            apiKey: Deno.env.get('GEMINI_API_KEY')!,
-            model: 'gemini-3.0-flash-preview',
-        };
+        const aiConfig = await resolveAIConfigFromHttpRequest(req, body);
 
         // Build confusion markers instruction
         let confusionInstruction = '';
@@ -123,9 +112,12 @@ Generate a comprehensive study guide in a single JSON response with:
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     } catch (error) {
+        const configResp = aiConfigErrorResponse(error, corsHeaders);
+        if (configResp) return configResp;
         console.error('Summarization error:', error);
+        const message = error instanceof Error ? error.message : 'Summarization failed';
         return new Response(
-            JSON.stringify({ error: error.message, code: 'INTERNAL_ERROR' }),
+            JSON.stringify({ error: message, code: 'INTERNAL_ERROR' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }

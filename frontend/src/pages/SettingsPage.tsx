@@ -7,6 +7,8 @@ import { useAppContext } from '../context/AppContext';
 import CoursesSetupPanel from '../components/CoursesSetupPanel';
 import NotionConnectPanel from '../components/NotionConnectPanel';
 import TopBar from '../components/TopBar';
+import { STUDY_PLANNER_ENABLED } from '../constants/featureFlags';
+import { GuestSettingsService } from '../services/guestSettingsService';
 
 const AI_PROVIDERS: { id: AIProvider; label: string }[] = [
   { id: 'gemini', label: 'Google Gemini' },
@@ -65,6 +67,8 @@ const NAV_GROUPS: NavGroup[] = [
   { label: 'Advanced', items: ['data', 'danger'] },
 ];
 
+const GUEST_SECTIONS: Section[] = ['account', 'appearance', 'keyboard', 'ai', 'courses', 'audio', 'flags', 'data'];
+
 interface SettingsPageProps {
   onLogout: () => void;
 }
@@ -73,6 +77,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, courses, fetchCourses, userSettings, setUserSettings } = useAppContext();
+  const isGuest = user?.id === 'guest';
+  const navGroups = isGuest
+    ? NAV_GROUPS
+        .map(g => ({ ...g, items: g.items.filter(i => GUEST_SECTIONS.includes(i)) }))
+        .filter(g => g.items.length > 0)
+    : NAV_GROUPS;
   const [activeSection, setActiveSection] = useState<Section>('ai');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -205,15 +215,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
     }
   }, [theme]);
 
-  if (!user || user.id === 'guest') {
+  if (!user) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', maxWidth: 360, padding: '0 24px' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
-          <h2 style={{ fontSize: 22, fontWeight: 600, margin: '0 0 8px' }}>Sign in required</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: '0 0 20px', lineHeight: 1.6 }}>
-            Settings are only available for signed-in users.
-          </p>
+          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Sign in or continue as guest to open Settings.</p>
           <button className="btn btn-primary" onClick={() => navigate('/')}>Back home</button>
         </div>
       </div>
@@ -241,6 +247,23 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
   const handleSaveAI = async () => {
     setIsSaving(true); setSaveError(''); setSaveSuccess(false);
     try {
+      if (isGuest) {
+        if (!apiKey.trim() && !hasKeyLabel()) {
+          setSaveError('Add an API key for your selected provider before saving.');
+          return;
+        }
+        const raw = GuestSettingsService.save({
+          aiProvider: selectedProvider,
+          aiModel: selectedModel,
+          apiKey: apiKey.trim() || undefined,
+          providerForKey: selectedProvider,
+        });
+        setUserSettings(GuestSettingsService.toUserSettings(raw));
+        setApiKey('');
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+        return;
+      }
       const patch: Record<string, unknown> = { aiProvider: selectedProvider, aiModel: selectedModel };
       const keyField: Record<AIProvider, string> = { gemini: 'geminiApiKey', openai: 'openaiApiKey', anthropic: 'anthropicApiKey', openrouter: 'openrouterApiKey' };
       if (apiKey.trim()) patch[keyField[selectedProvider]] = apiKey.trim();
@@ -301,7 +324,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '220px 1fr', overflow: 'hidden' }}>
         {/* Left nav rail */}
         <div style={{ borderRight: '1px solid var(--border)', background: 'var(--bg)', overflowY: 'auto', padding: '12px 8px' }}>
-          {NAV_GROUPS.map(group => (
+          {navGroups.map(group => (
             <div key={group.label} style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-soft)', padding: '4px 8px 6px' }}>
                 {group.label}
@@ -362,7 +385,6 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
               <SectionContent title="Account">
                 <Row label="Name" value={user.name} />
                 <Row label="Email" value={user.email ?? '—'} />
-                <Row label="Plan" value="Free" />
                 <div style={{ marginTop: 20 }}>
                   <button className="btn" style={{ color: 'var(--bad)', borderColor: 'var(--bad-soft)' }} onClick={onLogout}>
                     Sign out
@@ -417,6 +439,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
             {/* AI Provider */}
             {activeSection === 'ai' && (
               <SectionContent title="AI provider">
+                <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
+                  ProfSummarizer uses your own API key (BYOK). Choose a provider, pick a model, and add your key before recording or generating study materials.
+                </p>
                 <SettingBlock label="Provider">
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     {AI_PROVIDERS.map(p => (
@@ -482,7 +507,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
 
                 <SettingBlock label={`${API_KEY_LABELS[selectedProvider]}${hasKeyLabel() ? ' (key saved)' : ''}`}>
                   <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={hasKeyLabel() ? 'Enter new key to replace…' : 'Paste your API key…'} style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} />
-                  <div style={{ fontSize: 11, color: 'var(--text-soft)', marginTop: 4 }}>Leave blank to keep existing key. Keys are encrypted before storage.</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-soft)', marginTop: 4 }}>
+                    {isGuest
+                      ? 'Stored locally in your browser only. Never shared except with your chosen AI provider when you transcribe or study.'
+                      : 'Leave blank to keep existing key. Keys are encrypted before storage.'}
+                  </div>
                 </SettingBlock>
 
                 <button className="btn btn-accent" onClick={handleSaveAI} disabled={isSaving} style={{ marginTop: 8 }}>
@@ -499,7 +528,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
                 </p>
                 {([
                   { key: 'agentAutoOrganizer', label: 'Auto-Organizer', desc: 'Suggests which course a lecture belongs to after saving.' },
-                  { key: 'agentStudyPlanner', label: 'Study Planner', desc: 'Builds a prioritized plan for a course folder.' },
+                  ...(STUDY_PLANNER_ENABLED ? [{ key: 'agentStudyPlanner' as const, label: 'Study Planner', desc: 'Builds a prioritized plan for a course folder.' }] : []),
                   { key: 'agentResearch', label: 'Research Assistant', desc: 'Finds study directions for topics marked confusing during recording.' },
                   { key: 'agentMultiStep', label: 'Multi-Step Pipeline', desc: 'Runs a configurable sequence of actions after each lecture.' },
                 ] as const).map(({ key, label, desc }) => (
@@ -529,7 +558,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
                   <button className="btn btn-accent" onClick={handleSaveAgents} disabled={isSaving}>
                     {isSaving ? 'Saving…' : 'Save agent settings'}
                   </button>
-                  {agentToggles.agentStudyPlanner && (
+                  {STUDY_PLANNER_ENABLED && agentToggles.agentStudyPlanner && (
                     <button className="btn" type="button" onClick={() => navigate('/planner')}>Open Study planner →</button>
                   )}
                 </div>

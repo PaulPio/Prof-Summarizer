@@ -5,6 +5,7 @@ import { SettingsService } from '../services/settingsService';
 import { useAppContext } from '../context/AppContext';
 import CoursesSetupPanel from '../components/CoursesSetupPanel';
 import NotionConnectPanel from '../components/NotionConnectPanel';
+import { STUDY_PLANNER_ENABLED } from '../constants/featureFlags';
 
 const TOTAL_STEPS = 4;
 
@@ -37,20 +38,23 @@ const OnboardingPage: React.FC = () => {
   const finish = async () => {
     setIsFinishing(true);
     try {
-      const patch: Record<string, any> = {
+      const patch: Record<string, unknown> = {
         ...agents,
         aiProvider: provider,
         hasCompletedOnboarding: true,
       };
-      if (apiKey.trim()) {
-        const keyField: Record<AIProvider, string> = {
-          gemini: 'geminiApiKey',
-          openai: 'openaiApiKey',
-          anthropic: 'anthropicApiKey',
-          openrouter: 'openrouterApiKey',
-        };
-        patch[keyField[provider]] = apiKey.trim();
+      const keyField: Record<AIProvider, string> = {
+        gemini: 'geminiApiKey',
+        openai: 'openaiApiKey',
+        anthropic: 'anthropicApiKey',
+        openrouter: 'openrouterApiKey',
+      };
+      if (!apiKey.trim()) {
+        setIsFinishing(false);
+        setStep(3);
+        return;
       }
+      patch[keyField[provider]] = apiKey.trim();
       await SettingsService.updateSettings(patch);
       const updated = await SettingsService.getSettings();
       setUserSettings(updated);
@@ -90,7 +94,7 @@ const OnboardingPage: React.FC = () => {
               <div className="space-y-3">
                 {[
                   { key: 'agentAutoOrganizer' as const, icon: '📁', label: 'Auto-Organizer', desc: 'Automatically sort lectures into courses' },
-                  { key: 'agentStudyPlanner' as const, icon: '📅', label: 'Study Planner', desc: 'Get a personalized study schedule' },
+                  ...(STUDY_PLANNER_ENABLED ? [{ key: 'agentStudyPlanner' as const, icon: '📅', label: 'Study Planner', desc: 'Get a personalized study schedule' }] : []),
                   { key: 'agentResearch' as const, icon: '🔍', label: 'Research Assistant', desc: 'Find study directions for confusing topics' },
                   { key: 'agentMultiStep' as const, icon: '⚡', label: 'Multi-Step Pipeline', desc: 'Automate post-lecture processing' },
                 ].map(({ key, icon, label, desc }) => (
@@ -127,7 +131,7 @@ const OnboardingPage: React.FC = () => {
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-xl font-black text-gray-900">AI Provider</h2>
-                <p className="text-sm text-gray-500 mt-1">Choose your AI provider. You can always use ProfSummarizer without a key using the built-in Gemini access.</p>
+                <p className="text-sm text-gray-500 mt-1">Choose your provider and add your API key. Transcription and study tools require BYOK — your key is encrypted at rest.</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {AI_PROVIDERS.map(p => (
@@ -142,15 +146,15 @@ const OnboardingPage: React.FC = () => {
                 ))}
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">API Key (optional)</label>
+                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">API Key (required)</label>
                 <input
                   type="password"
                   value={apiKey}
                   onChange={e => setApiKey(e.target.value)}
-                  placeholder="Paste your API key to use your own quota…"
+                  placeholder="Paste your API key…"
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
                 />
-                <p className="text-xs text-gray-400 mt-1">Leave blank to use the built-in Gemini access. Keys are encrypted at rest.</p>
+                <p className="text-xs text-gray-400 mt-1">Required to transcribe and generate notes. Keys are encrypted server-side.</p>
               </div>
             </div>
           )}
@@ -180,8 +184,14 @@ const OnboardingPage: React.FC = () => {
               </button>
             )}
             {step < TOTAL_STEPS ? (
-              <button onClick={() => setStep(s => s + 1)} className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors">
-                {step === 2 || step === 4 ? 'Skip for now' : 'Continue'}
+              <button
+                onClick={() => {
+                  if (step === 3 && !apiKey.trim()) return;
+                  setStep(s => s + 1);
+                }}
+                className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors"
+              >
+                {step === 2 || step === 4 ? 'Skip for now' : step === 3 ? 'Continue' : 'Continue'}
               </button>
             ) : (
               <button onClick={finish} disabled={isFinishing} className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">

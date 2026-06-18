@@ -1,7 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, callGemini } from '../_shared/gemini.ts';
-import { resolveAIConfig, callAI } from '../_shared/ai-provider.ts';
+import { resolveAIConfigFromHttpRequest, aiConfigErrorResponse, callAI } from '../_shared/ai-provider.ts';
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
@@ -9,7 +8,8 @@ Deno.serve(async (req) => {
     }
 
     try {
-        const { transcript, messages } = await req.json();
+        const body = await req.json();
+        const { transcript, messages } = body;
 
         if (!transcript || !messages || !Array.isArray(messages)) {
             return new Response(
@@ -18,17 +18,7 @@ Deno.serve(async (req) => {
             );
         }
 
-        const authHeader = req.headers.get('Authorization');
-        const token = authHeader?.replace('Bearer ', '') || '';
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-        const anonClient = createClient(supabaseUrl, anonKey);
-        const { data: { user } } = await anonClient.auth.getUser(token);
-        const aiConfig = user ? await resolveAIConfig(user.id) : {
-            provider: 'gemini' as const,
-            apiKey: Deno.env.get('GEMINI_API_KEY')!,
-            model: 'gemini-3.0-flash-preview',
-        };
+        const aiConfig = await resolveAIConfigFromHttpRequest(req, body);
 
         const systemInstruction = `You are a helpful professor assistant. The student has recorded a lecture and wants to ask questions about it.
 
@@ -58,9 +48,12 @@ Answer the student's questions based on this specific lecture content. Be helpfu
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     } catch (error) {
+        const configResp = aiConfigErrorResponse(error, corsHeaders);
+        if (configResp) return configResp;
         console.error('Chat error:', error);
+        const message = error instanceof Error ? error.message : 'Chat failed';
         return new Response(
-            JSON.stringify({ error: error.message, code: 'INTERNAL_ERROR' }),
+            JSON.stringify({ error: message, code: 'INTERNAL_ERROR' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }

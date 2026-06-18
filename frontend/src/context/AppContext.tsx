@@ -4,6 +4,7 @@ import { User, AgentJob } from '../types';
 import { supabase } from '../services/supabase';
 import { StorageService } from '../services/storageService';
 import { SettingsService } from '../services/settingsService';
+import { GuestSettingsService } from '../services/guestSettingsService';
 import { AppContext, type AppContextValue, type FetchLecturesOptions } from './appContextInstance';
 
 export type { AppContextValue };
@@ -139,7 +140,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   useEffect(() => {
-    if (!user || user.id === 'guest') { setUserSettings(null); return; }
+    if (!user) { setUserSettings(null); return; }
+    if (user.id === 'guest') {
+      setUserSettings(GuestSettingsService.toUserSettings());
+      return;
+    }
     SettingsService.getSettings()
       .then(setUserSettings)
       .catch(err => console.error('Failed to load settings:', err));

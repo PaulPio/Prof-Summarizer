@@ -65,12 +65,11 @@ function isAIProvider(value: string | null | undefined): value is AIProvider {
   return value === 'gemini' || value === 'openai' || value === 'anthropic' || value === 'openrouter';
 }
 
-/** Resolve the user's selected AI provider, model, and API key from Settings. */
+/** Resolve the user's selected AI provider, model, and API key from Settings (signed-in only; no platform fallback). */
 export async function resolveAIConfig(userId: string): Promise<AIConfig> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const encryptionKey = Deno.env.get('APP_ENCRYPTION_KEY');
-  const platformGeminiKey = Deno.env.get('GEMINI_API_KEY');
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -81,9 +80,6 @@ export async function resolveAIConfig(userId: string): Promise<AIConfig> {
     .single();
 
   if (error || !data) {
-    if (platformGeminiKey) {
-      return { provider: 'gemini', apiKey: platformGeminiKey, model: GEMINI_DEFAULT_MODEL };
-    }
     throw new AIConfigError(
       'Configure an AI provider and API key in Settings → AI.',
       'AI_NOT_CONFIGURED',
@@ -96,43 +92,83 @@ export async function resolveAIConfig(userId: string): Promise<AIConfig> {
   const encColumn = PROVIDER_KEY_COLUMNS[provider];
   const encValue = row[encColumn as keyof UserSettingsRow] as string | null;
 
-  // User chose a non-Gemini provider — require their own API key (never use platform Gemini).
-  if (provider !== 'gemini') {
-    if (!encValue) {
-      throw new AIConfigError(
-        `Add your ${PROVIDER_LABELS[provider]} API key in Settings → AI, then click Save AI Settings.`,
-        'API_KEY_REQUIRED',
-      );
-    }
-    if (!encryptionKey) {
-      throw new AIConfigError(
-        'Server encryption is not configured. Contact the app administrator.',
-        'ENCRYPTION_NOT_CONFIGURED',
-      );
-    }
-    const apiKey = await decryptUserKey(supabase, encValue, encryptionKey, provider);
-    return { provider, apiKey, model };
+  if (!encValue) {
+    throw new AIConfigError(
+      `Add your ${PROVIDER_LABELS[provider]} API key in Settings → AI, then click Save AI settings.`,
+      'API_KEY_REQUIRED',
+    );
   }
 
-  // Gemini: prefer user's saved key, else optional platform key for hosted/demo use.
-  if (encValue && encryptionKey) {
-    try {
-      const apiKey = await decryptUserKey(supabase, encValue, encryptionKey, provider);
-      return { provider: 'gemini', apiKey, model };
-    } catch (err) {
-      console.error('Gemini key decryption failed:', err);
-      if (!platformGeminiKey) throw err;
-    }
+  if (!encryptionKey) {
+    throw new AIConfigError(
+      'Server encryption is not configured. Contact the app administrator.',
+      'ENCRYPTION_NOT_CONFIGURED',
+    );
   }
 
-  if (platformGeminiKey) {
-    return { provider: 'gemini', apiKey: platformGeminiKey, model };
+  const apiKey = await decryptUserKey(supabase, encValue, encryptionKey, provider);
+  return { provider, apiKey, model };
+}
+
+export type GuestAiForward = {
+  aiProvider?: unknown;
+  aiModel?: unknown;
+  aiApiKey?: unknown;
+};
+
+/** Signed-in users: encrypted keys in DB. Guests / anon: optional forwarded credentials in request body. */
+export async function resolveAIConfigForRequest(
+  userId: string | null,
+  body: GuestAiForward,
+): Promise<AIConfig> {
+  if (userId) {
+    return resolveAIConfig(userId);
   }
 
-  throw new AIConfigError(
-    'Add your Gemini API key in Settings → AI, or ask the administrator to set GEMINI_API_KEY.',
-    'API_KEY_REQUIRED',
-  );
+  const providerRaw = typeof body.aiProvider === 'string' ? body.aiProvider : '';
+  const modelRaw = typeof body.aiModel === 'string' ? body.aiModel.trim() : '';
+  const apiKeyRaw = typeof body.aiApiKey === 'string' ? body.aiApiKey.trim() : '';
+
+  if (!isAIProvider(providerRaw) || !apiKeyRaw) {
+    throw new AIConfigError(
+      'Add your API key in Settings → AI before using transcription and study tools.',
+      'API_KEY_REQUIRED',
+    );
+  }
+
+  const provider = providerRaw;
+  const model = modelRaw || DEFAULT_MODELS[provider];
+  return { provider, apiKey: apiKeyRaw, model };
+}
+
+export function aiConfigErrorResponse(err: unknown, corsHeaders: Record<string, string>): Response | null {
+  if (err instanceof AIConfigError) {
+    const status = err.code === 'API_KEY_REQUIRED' || err.code === 'AI_NOT_CONFIGURED' ? 400 : 500;
+    return new Response(JSON.stringify({ error: err.message, code: err.code }), {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  return null;
+}
+
+async function getUserIdFromRequest(req: Request): Promise<string | null> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.replace('Bearer ', '');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const anonClient = createClient(supabaseUrl, anonKey);
+  const { data: { user } } = await anonClient.auth.getUser(token);
+  return user?.id ?? null;
+}
+
+export async function resolveAIConfigFromHttpRequest(
+  req: Request,
+  body: GuestAiForward,
+): Promise<AIConfig> {
+  const userId = await getUserIdFromRequest(req);
+  return resolveAIConfigForRequest(userId, body);
 }
 
 async function decryptUserKey(

@@ -1,7 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, callGemini } from '../_shared/gemini.ts';
-import { resolveAIConfig, callAI } from '../_shared/ai-provider.ts';
+import { resolveAIConfigFromHttpRequest, aiConfigErrorResponse, callAI } from '../_shared/ai-provider.ts';
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
@@ -9,7 +8,8 @@ Deno.serve(async (req) => {
     }
 
     try {
-        const { transcript, questionCount = 5 } = await req.json();
+        const body = await req.json();
+        const { transcript, questionCount = 5 } = body;
 
         if (!transcript) {
             return new Response(
@@ -21,17 +21,7 @@ Deno.serve(async (req) => {
         const validCounts = [5, 10, 15, 20];
         const count = validCounts.includes(questionCount) ? questionCount : 5;
 
-        const authHeader = req.headers.get('Authorization');
-        const token = authHeader?.replace('Bearer ', '') || '';
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-        const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-        const anonClient = createClient(supabaseUrl, anonKey);
-        const { data: { user } } = await anonClient.auth.getUser(token);
-        const aiConfig = user ? await resolveAIConfig(user.id) : {
-            provider: 'gemini' as const,
-            apiKey: Deno.env.get('GEMINI_API_KEY')!,
-            model: 'gemini-3.0-flash-preview',
-        };
+        const aiConfig = await resolveAIConfigFromHttpRequest(req, body);
 
         const systemInstruction = `You are an expert educator creating a quiz based on a lecture. Generate exactly ${count} multiple-choice questions that test understanding of the key concepts.
 
@@ -79,9 +69,12 @@ Mix factual recall, conceptual understanding, and application questions. Never u
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     } catch (error) {
+        const configResp = aiConfigErrorResponse(error, corsHeaders);
+        if (configResp) return configResp;
         console.error('Quiz generation error:', error);
+        const message = error instanceof Error ? error.message : 'Quiz generation failed';
         return new Response(
-            JSON.stringify({ error: error.message, code: 'INTERNAL_ERROR' }),
+            JSON.stringify({ error: message, code: 'INTERNAL_ERROR' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }

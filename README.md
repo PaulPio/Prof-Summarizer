@@ -11,10 +11,10 @@ AI-powered lecture transcription and study companion. Record or upload lectures,
 - **Confusion markers** — Mark confusing moments while recording for extra explanation in summaries
 - **Cloud sync** — Google sign-in + Supabase storage, or **guest mode** (localStorage)
 - **Courses** — Organize lectures by class; import schedules from `.ics` or text-based PDFs; optional syllabus upload
-- **Multi-provider AI** — Gemini (default), OpenAI, Anthropic, or OpenRouter with per-user API keys (encrypted)
-- **Notion** — OAuth connect and export notes from lecture detail
-- **Canvas LMS** — Connect and browse course materials (via Edge Function proxy)
-- **Agents** — Auto-organizer, study planner, research enrichment, and multi-step pipeline (optional in Settings)
+- **Bring your own key (BYOK)** — Gemini, OpenAI, Anthropic, or OpenRouter. Signed-in users store encrypted keys in Supabase; guests store keys locally and forward them per request.
+- **Dynamic model lists** — Settings loads live model catalogs via the `list-ai-models` Edge Function
+- **Notion** — OAuth connect and export notes from lecture detail (signed-in users)
+- **Agents** — Auto-organizer, research enrichment, and multi-step pipeline (optional in Settings). Study planner UI is hidden by default (`STUDY_PLANNER_ENABLED` in `frontend/src/constants/featureFlags.ts`).
 
 ## Project structure
 
@@ -25,9 +25,9 @@ Prof-Summarizer/
 │   │   ├── pages/               # Record, lecture detail, settings, onboarding
 │   │   ├── components/
 │   │   ├── context/             # AppContext (user, lectures, settings)
-│   │   ├── services/            # API, storage, agents, notion, canvas
+│   │   ├── services/            # API, storage, agents, notion, guest settings
 │   │   └── types.ts
-│   ├── index.html               # Tailwind CDN, Inter font
+│   ├── index.html               # Tailwind CDN, design tokens
 │   └── package.json
 │
 ├── backend/
@@ -35,13 +35,13 @@ Prof-Summarizer/
 │   │   └── deploy-all-functions.mjs
 │   └── supabase/
 │       ├── config.toml
-│       ├── migrations/          # 001–004 SQL migrations
+│       ├── migrations/          # 001–005 SQL migrations
 │       └── functions/           # Edge Functions (see below)
 │
 ├── README.md
-├── AGENTS.md                    # Agent / contributor architecture guide
-├── PROMPT.md                    # Copy-paste system prompt for AI sessions
-└── DESIGN.md                    # UI design system
+├── AGENTS.md
+├── PROMPT.md
+└── DESIGN.md
 ```
 
 ### Edge Functions
@@ -54,9 +54,8 @@ Prof-Summarizer/
 | `generate-quiz` | Lecture → multiple-choice quiz |
 | `chat` | Context-aware Q&A |
 | `user-settings` | AI provider, keys, onboarding, agent toggles |
-| `list-ai-models` | Live model catalog per provider |
+| `list-ai-models` | Live model catalog per provider (signed-in or anon JWT for guests) |
 | `agent-run` | Auto-organizer, study planner, research, pipeline |
-| `canvas-proxy` | Canvas LMS API proxy |
 | `notion-oauth-start` / `notion-oauth-callback` / `notion-proxy` | Notion OAuth + API |
 
 Shared code: `backend/supabase/functions/_shared/`
@@ -69,6 +68,7 @@ Shared code: `backend/supabase/functions/_shared/`
 - npm
 - [Supabase CLI](https://supabase.com/docs/guides/cli)
 - A Supabase project (Postgres + Auth + Edge Functions)
+- An API key from your chosen AI provider (Gemini, OpenAI, Anthropic, or OpenRouter)
 
 ### Frontend
 
@@ -93,13 +93,14 @@ cd backend
 supabase link --project-ref YOUR_PROJECT_REF
 ```
 
-**Secrets:**
+**Secrets (required for signed-in BYOK encryption):**
 
 ```bash
-supabase secrets set GEMINI_API_KEY=your_gemini_api_key
 supabase secrets set APP_ENCRYPTION_KEY=your_32_char_random_secret
 supabase secrets set ALLOWED_ORIGIN=http://localhost:3000
 ```
+
+`GEMINI_API_KEY` is **not** used as a platform fallback for signed-in users. Guests forward their own key from Settings (localStorage) on each AI request.
 
 **Deploy functions:**
 
@@ -119,6 +120,7 @@ Schema is managed with SQL files in `backend/supabase/migrations/`:
 | `002_courses_and_settings.sql` | `courses`, `user_settings`, `agent_jobs`, encryption helpers |
 | `003_lectures_update_policy.sql` | RLS UPDATE on `lectures` |
 | `004_notion_oauth.sql` | Notion OAuth fields on `user_settings` |
+| `005_course_syllabi_remove_canvas.sql` | Course syllabi storage; removes Canvas integration |
 
 Apply locally from `backend/`:
 
@@ -128,14 +130,20 @@ supabase db reset          # fresh local DB + all migrations
 supabase migration up
 ```
 
-The base `lectures` table is expected to exist from your initial Supabase setup. If you are bootstrapping manually, you can also run the study-mode column additions from migration `001` in the SQL Editor.
+Apply to a linked remote project:
+
+```bash
+supabase db push
+```
+
+The base `lectures` table is expected to exist from your initial Supabase setup.
 
 ### Notion OAuth (optional)
 
 1. Create a public integration at https://www.notion.so/my-integrations
 2. Redirect URI: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/notion-oauth-callback`
 3. For local dev: `http://127.0.0.1:54321/functions/v1/notion-oauth-callback`
-4. **JWT:** `notion-oauth-callback` has `verify_jwt = false` in [`backend/supabase/config.toml`](backend/supabase/config.toml) because Notion’s redirect does not send an `Authorization` header. Deploy from `backend/` so this applies.
+4. **JWT:** `notion-oauth-callback` has `verify_jwt = false` in [`backend/supabase/config.toml`](backend/supabase/config.toml) because Notion’s redirect does not send an `Authorization` header.
 
 ```bash
 supabase secrets set NOTION_CLIENT_ID=your_notion_client_id
@@ -156,19 +164,30 @@ VITE_SUPABASE_ANON_KEY=your_anon_key
 
 | Secret | Purpose |
 |--------|---------|
-| `GEMINI_API_KEY` | Default AI / transcription |
-| `APP_ENCRYPTION_KEY` | Encrypt user API keys & OAuth tokens (32 characters) |
+| `APP_ENCRYPTION_KEY` | Encrypt user API keys & OAuth tokens (32 characters) — **required** |
 | `ALLOWED_ORIGIN` | CORS origin for Edge Functions |
 | `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET` / `NOTION_OAUTH_REDIRECT_URI` | Notion OAuth (optional) |
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are provided automatically in the Edge runtime.
 
+## Auth modes
+
+| Mode | Storage | AI keys | Settings |
+|------|---------|---------|----------|
+| **Google sign-in** | Supabase `lectures` / `courses` | Encrypted in `user_settings` | Full Settings + onboarding |
+| **Guest** | `localStorage` | Local only; forwarded per Edge Function call | Settings → AI, courses, capture options |
+
+Guests and signed-in users must configure an API key before transcribing or generating study materials.
+
 ## Integrations
 
-- **Notion** — Settings → Notion → Connect; export from a lecture’s detail page.
-- **Courses** — Settings → Courses: add classes, import `.ics` or schedule PDF (text-based PDFs work best), upload syllabus to private Storage bucket `course-documents`.
-- **Canvas** — Settings (Canvas panel): connect instance URL and token; browse materials via `canvas-proxy`.
-- **Agents** — Settings → Agents: enable auto-organizer, study planner, research, or multi-step pipeline (10 jobs/user/hour).
+- **Notion** — Settings → Notion → Connect (signed-in); export from lecture detail.
+- **Courses** — Settings → Courses: add classes, import `.ics` or schedule PDF, upload syllabus to Storage bucket `course-documents`.
+- **Agents** — Settings → Agents: enable auto-organizer, research, or multi-step pipeline (10 jobs/user/hour).
+
+## UI notes
+
+The app shell uses `overflow: hidden` on `body` and internal scroll regions (`minHeight: 0` flex children) so the dashboard and landing page scroll correctly inside panes.
 
 ## Deployment
 
@@ -185,33 +204,29 @@ VITE_SUPABASE_ANON_KEY=your_anon_key
 ```bash
 cd backend
 supabase functions deploy
+supabase db push   # if migrations are pending on remote
 ```
 
-Set production secrets (including `ALLOWED_ORIGIN` to your Vercel URL).
+Set production secrets (including `ALLOWED_ORIGIN` to your Vercel URL and `APP_ENCRYPTION_KEY`).
 
 ## Tech stack
 
 | Layer | Technology |
 |--------|------------|
 | Frontend | React 19, TypeScript, Vite 6, React Router 6 |
-| Styling | Tailwind CSS (CDN), Inter |
+| Styling | Tailwind CSS (CDN), Inter + DM Serif Display |
 | Backend | Supabase Edge Functions (Deno) |
 | Database | PostgreSQL (Supabase), SQL migrations |
 | Auth | Supabase Auth (Google OAuth) + guest mode |
-| AI | Gemini 3.0 Flash Preview (default); OpenAI, Anthropic, OpenRouter supported |
-| Analytics | Vercel Analytics |
-
-## Design explorations
-
-Open `design-explorations/index.html` in a browser. **Landing C (Warm Campus)** is selected; review **four interior dashboard** mockups in the same palette before we implement in the React app.
+| AI | BYOK — Gemini, OpenAI, Anthropic, OpenRouter |
 
 ## Documentation for contributors & agents
 
 | Doc | Description |
 |-----|-------------|
-| [AGENTS.md](./AGENTS.md) | Architecture, commands, conventions, critical agent rules |
-| [PROMPT.md](./PROMPT.md) | Session system prompt (`@PROMPT.md` in Cursor) |
-| [DESIGN.md](./DESIGN.md) | Colors, typography, components, UI checklist |
+| [AGENTS.md](./AGENTS.md) | Architecture, commands, conventions |
+| [PROMPT.md](./PROMPT.md) | Session system prompt |
+| [DESIGN.md](./DESIGN.md) | Colors, typography, components |
 
 ## License
 

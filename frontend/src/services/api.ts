@@ -1,13 +1,20 @@
 import { ChatMessage, Flashcard, QuizQuestion, LectureSummary, CornellNotes } from '../types';
 import { supabase } from './supabase';
+import { GuestSettingsService } from './guestSettingsService';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 
-export async function callEdgeFunction<T>(functionName: string, body: any): Promise<T> {
+export async function callEdgeFunction<T>(functionName: string, body: Record<string, unknown>): Promise<T> {
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token ?? SUPABASE_ANON_KEY;
+
+    const payload = { ...body };
+    if (!session) {
+        const guestAi = GuestSettingsService.getAiForwardPayload();
+        if (guestAi) Object.assign(payload, guestAi);
+    }
 
     const response = await fetch(`${FUNCTIONS_URL}/${functionName}`, {
         method: 'POST',
@@ -16,7 +23,7 @@ export async function callEdgeFunction<T>(functionName: string, body: any): Prom
             'Authorization': `Bearer ${token}`,
             'apikey': SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -32,9 +39,6 @@ export async function callEdgeFunction<T>(functionName: string, body: any): Prom
             message =
                 'Study planner timed out on the server (limit ~2.5 min). Try a faster OpenRouter model (e.g. openai/gpt-4o-mini) in Settings → AI, or select fewer lectures.';
         }
-        // #region agent log
-        fetch('http://127.0.0.1:7360/ingest/14547040-52a9-4edb-891a-185fbb602c58',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7542ea'},body:JSON.stringify({sessionId:'7542ea',location:'api.ts:callEdgeFunction',message:'edge function error',data:{functionName,status:response.status,messagePreview:message.slice(0,120)},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-        // #endregion
         throw new Error(message);
     }
 

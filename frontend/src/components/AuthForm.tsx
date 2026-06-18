@@ -9,26 +9,18 @@ interface AuthFormProps {
 const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [origin, setOrigin] = useState('');
-  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const cleanOrigin = window.location.origin.replace(/\/$/, '');
-      setOrigin(cleanOrigin);
+    if (typeof window === 'undefined') return;
 
-      const params = new URLSearchParams(window.location.search);
-      const errorDescription = params.get('error_description');
-      const errorCode = params.get('error_code');
+    const params = new URLSearchParams(window.location.search);
+    const errorDescription = params.get('error_description');
+    const errorCode = params.get('error_code');
 
-      if (errorDescription || errorCode) {
-        const decodedError = decodeURIComponent(errorDescription || errorCode || 'Unknown error');
-        setError(decodedError);
-        if (decodedError.includes('Unable to exchange external code') || decodedError.includes('exchange')) {
-          setShowGuide(true);
-        }
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
+    if (errorDescription || errorCode) {
+      const decodedError = decodeURIComponent(errorDescription || errorCode || 'Unknown error');
+      setError(decodedError);
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
@@ -64,7 +56,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#faf8f5] text-stone-900 antialiased">
+    <div className="h-screen overflow-y-auto bg-[#faf8f5] text-stone-900 antialiased">
       <nav className="max-w-5xl mx-auto px-6 py-6 flex items-center justify-between border-b border-stone-200/80">
         <span className="font-serif text-2xl italic text-stone-800">ProfSummarizer</span>
       </nav>
@@ -81,16 +73,9 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
         </p>
 
         {error ? (
-          <div className="mt-8 max-w-xl bg-red-50 border border-red-100 rounded-2xl p-5 text-left space-y-3">
+          <div className="mt-8 max-w-xl bg-red-50 border border-red-100 rounded-2xl p-5 text-left">
             <p className="text-xs font-bold text-red-700 uppercase tracking-wide">Sign-in error</p>
-            <p className="text-sm text-red-600">{error}</p>
-            <button
-              type="button"
-              onClick={() => setShowGuide(!showGuide)}
-              className="text-sm font-semibold text-red-800 hover:underline"
-            >
-              {showGuide ? 'Hide troubleshooting' : 'Show troubleshooting'}
-            </button>
+            <p className="text-sm text-red-600 mt-2">{error}</p>
           </div>
         ) : null}
 
@@ -118,13 +103,6 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
             Guest — local only
           </button>
         </p>
-        <button
-          type="button"
-          onClick={() => setShowGuide(!showGuide)}
-          className="mt-6 text-xs font-semibold text-stone-400 hover:text-amber-800 uppercase tracking-wide"
-        >
-          {showGuide ? 'Close troubleshooting' : 'Troubleshooting guide'}
-        </button>
       </header>
 
       <section className="bg-white border-y border-stone-200 py-16">
@@ -161,32 +139,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ onLogin }) => {
           <p className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">Included</p>
           <ul className="space-y-2 text-sm text-stone-700">
             <li>✓ Course folders & schedule import</li>
-            <li>✓ Notion export</li>
-            <li>✓ Study planner agent</li>
-            <li>✓ Bring your own API key</li>
+            <li>✓ Notion export (signed-in)</li>
+            <li>✓ Bring your own API key — Gemini, OpenAI, Anthropic, or OpenRouter</li>
+            <li>✓ Guest mode stores lectures locally in your browser</li>
           </ul>
         </aside>
       </section>
-
-      {showGuide && (
-        <section className="max-w-2xl mx-auto px-6 pb-12">
-          <div className="bg-white border border-red-100 rounded-2xl p-6 shadow-sm text-left space-y-4">
-            <h3 className="font-bold text-stone-900 text-sm">Fixing “Unable to exchange code”</h3>
-            <ol className="list-decimal pl-4 text-xs text-stone-700 space-y-3">
-              <li>
-                <strong>Invisible spaces:</strong> In Google Cloud → Redirect URIs, ensure no trailing spaces on your callback URL.
-              </li>
-              <li>
-                <strong>Regenerate client secret:</strong> Create a new secret in Google Cloud and paste it into Supabase.
-              </li>
-              <li>
-                <strong>JavaScript origins:</strong> Add exactly:
-                <code className="block mt-1 bg-stone-50 border border-stone-200 p-2 rounded font-mono text-[10px]">{origin}</code>
-              </li>
-            </ol>
-          </div>
-        </section>
-      )}
 
       <footer className="bg-stone-900 text-stone-300 py-14 text-center">
         <p className="font-serif text-2xl text-amber-50 italic">ProfSummarizer</p>

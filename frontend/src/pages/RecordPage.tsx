@@ -11,6 +11,7 @@ import {
   runGuestStudyMaterials,
   triggerPostLecturePipeline,
 } from '../services/postLecturePipeline';
+import { hasConfiguredAi } from '../utils/aiSettings';
 
 /* ─── helpers ─── */
 
@@ -271,12 +272,17 @@ const RecordPage: React.FC = () => {
   const totalCards = scopedLectures.reduce((n, l) => n + (l.flashcards?.length ?? 0), 0);
   const totalConfusions = scopedLectures.reduce((n, l) => n + (l.confusionMarkers?.length ?? 0), 0);
   const continueL = [...scopedLectures].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  const aiReady = hasConfiguredAi(userSettings);
 
   useEffect(() => {
     if ((status === AppState.REVIEWING || showSetup) && activeCourseId) setSelectedCourseId(activeCourseId);
   }, [status, showSetup, activeCourseId]);
 
   const handleOpenSetup = () => {
+    if (!aiReady) {
+      navigate('/settings?tab=ai');
+      return;
+    }
     if (activeCourseId) setSelectedCourseId(activeCourseId);
     setShowSetup(true);
   };
@@ -549,7 +555,7 @@ const RecordPage: React.FC = () => {
   /* ─── IDLE — Studio Dashboard ─── */
   if (status === AppState.IDLE || status === AppState.COMPLETED) {
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <TopBar
           breadcrumb={
             <>
@@ -573,9 +579,31 @@ const RecordPage: React.FC = () => {
 
         <input type="file" ref={audioInputRef} onChange={onAudioUpload} accept="audio/*" style={{ display: 'none' }} />
 
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
           <div style={{ maxWidth: 1180, margin: '0 auto', padding: '24px 28px 60px' }}>
             <AgentJobStatusBar />
+
+            {!aiReady && (
+              <div style={{
+                marginBottom: 20,
+                padding: '12px 16px',
+                borderRadius: 'var(--r)',
+                background: 'var(--confuse-soft)',
+                border: '1px solid var(--confuse)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                flexWrap: 'wrap',
+              }}>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text)' }}>
+                  Add your AI provider API key in Settings before recording or importing lectures.
+                </p>
+                <button className="btn btn-accent" type="button" onClick={() => navigate('/settings?tab=ai')}>
+                  Open Settings → AI
+                </button>
+              </div>
+            )}
 
             {/* hero */}
             <div style={{ marginBottom: 28 }}>

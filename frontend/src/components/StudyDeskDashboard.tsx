@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
+import { STUDY_PLANNER_ENABLED } from '../constants/featureFlags';
 
 interface StudyDeskDashboardProps {
   onStartRecording: () => void;
@@ -26,7 +27,7 @@ const StudyDeskDashboard: React.FC<StudyDeskDashboardProps> = ({ onStartRecordin
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
   )[0];
 
-  const plannerEnabled = userSettings?.agentStudyPlanner;
+  const plannerEnabled = STUDY_PLANNER_ENABLED && userSettings?.agentStudyPlanner;
 
   return (
     <article className="max-w-2xl">

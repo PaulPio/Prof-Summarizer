@@ -23,26 +23,15 @@ type ListResponseBody = {
   meta?: { curated?: boolean; error?: string };
 };
 
-async function requireUser(req: Request): Promise<Response | { id: string }> {
+async function getOptionalUserId(req: Request): Promise<string | null> {
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return new Response(JSON.stringify({ error: 'Authentication required', code: 'AUTH_REQUIRED' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+  if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.replace('Bearer ', '');
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const anonClient = createClient(supabaseUrl, anonKey);
-  const { data: { user }, error } = await anonClient.auth.getUser(token);
-  if (error || !user) {
-    return new Response(JSON.stringify({ error: 'Invalid token', code: 'AUTH_REQUIRED' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-  return { id: user.id };
+  const { data: { user } } = await anonClient.auth.getUser(token);
+  return user?.id ?? null;
 }
 
 async function fetchOpenRouter(bearerOptional?: string): Promise<{ models?: ModelEntry[]; err?: string }> {
@@ -124,10 +113,7 @@ Deno.serve(async (req) => {
     );
   }
 
-  const authResult = await requireUser(req);
-  if (authResult instanceof Response) {
-    return authResult;
-  }
+  await getOptionalUserId(req);
 
   let bodyRaw: Record<string, unknown>;
   try {
