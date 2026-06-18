@@ -9,12 +9,7 @@ import {
   sortModelEntries,
   type ModelEntry,
 } from '../_shared/list-models-utils.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') || '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+import { corsHeadersForRequest } from '../_shared/cors.ts';
 
 type ListResponseBody = {
   models: ModelEntry[];
@@ -82,7 +77,7 @@ async function fetchGemini(apiKey: string): Promise<{ models?: ModelEntry[]; err
   }
 }
 
-function json(body: ListResponseBody, status = 200) {
+function json(body: ListResponseBody, corsHeaders: Record<string, string>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -90,6 +85,8 @@ function json(body: ListResponseBody, status = 200) {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersForRequest(req, 'POST, OPTIONS');
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -97,6 +94,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return json(
       { models: [], source: 'fallback', meta: { error: 'Method not allowed' } },
+      corsHeaders,
       405,
     );
   }
@@ -109,7 +107,7 @@ Deno.serve(async (req) => {
       models: [],
       source: 'fallback',
       meta: { error: 'Invalid JSON body' },
-    }, 400);
+    }, corsHeaders, 400);
   }
 
   const providerRaw = bodyRaw.provider;
@@ -118,7 +116,7 @@ Deno.serve(async (req) => {
       models: [],
       source: 'fallback',
       meta: { error: 'Invalid or missing provider' },
-    }, 400);
+    }, corsHeaders, 400);
   }
   const provider: AIProviderId = providerRaw;
 
@@ -131,52 +129,52 @@ Deno.serve(async (req) => {
         models: curated,
         source: 'fallback',
         meta: { curated: true },
-      });
+      }, corsHeaders);
     }
 
     case 'openrouter': {
       const fb = FALLBACK_MODELS.openrouter;
       const { models, err } = await fetchOpenRouter(apiKey || undefined);
       if (models?.length) {
-        return json({ models: sortModelEntries(models), source: 'live' });
+        return json({ models: sortModelEntries(models), source: 'live' }, corsHeaders);
       }
       return json({
         models: fb,
         source: 'fallback',
         meta: { error: err || 'Unable to fetch OpenRouter models' },
-      });
+      }, corsHeaders);
     }
 
     case 'openai': {
       const fb = FALLBACK_MODELS.openai;
       if (!apiKey) {
-        return json({ models: fb, source: 'fallback' });
+        return json({ models: fb, source: 'fallback' }, corsHeaders);
       }
       const { models, err } = await fetchOpenAI(apiKey);
       if (models?.length) {
-        return json({ models: sortModelEntries(models), source: 'live' });
+        return json({ models: sortModelEntries(models), source: 'live' }, corsHeaders);
       }
       return json({
         models: fb,
         source: 'fallback',
         meta: { error: err || 'Unable to fetch OpenAI models' },
-      });
+      }, corsHeaders);
     }
 
     case 'gemini': {
       const fb = FALLBACK_MODELS.gemini;
       if (!apiKey) {
-        return json({ models: fb, source: 'fallback' });
+        return json({ models: fb, source: 'fallback' }, corsHeaders);
       }
       const { models, err } = await fetchGemini(apiKey);
       if (models?.length) {
-        return json({ models: sortModelEntries(models), source: 'live' });
+        return json({ models: sortModelEntries(models), source: 'live' }, corsHeaders);
       }
       return json({
         models: fb,
         source: 'fallback',
         meta: { error: err || 'Unable to fetch Gemini models' },
-      });
+      }, corsHeaders);
     }
 
   }

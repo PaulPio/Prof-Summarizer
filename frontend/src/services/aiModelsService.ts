@@ -11,14 +11,28 @@ export type ListAiModelsResponse = {
   meta?: { curated?: boolean; error?: string };
 };
 
+function wrapFetchError(err: unknown, context: string): Error {
+  if (err instanceof TypeError && /fetch/i.test(err.message)) {
+    return new Error(
+      `${context}: could not reach the server. Check VITE_SUPABASE_URL and that Supabase ALLOWED_ORIGIN includes ${typeof window !== 'undefined' ? window.location.origin : 'this site'}.`,
+    );
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 export const AiModelsService = {
   async listModels(provider: AIProvider, apiKey?: string): Promise<ListAiModelsResponse> {
     const headers = await getSupabaseFunctionAuthHeaders();
-    const res = await fetch(`${FUNCTIONS_URL}/list-ai-models`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ provider, apiKey: apiKey?.trim() || undefined }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${FUNCTIONS_URL}/list-ai-models`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ provider, apiKey: apiKey?.trim() || undefined }),
+      });
+    } catch (err) {
+      throw wrapFetchError(err, 'Load models');
+    }
 
     let body: ListAiModelsResponse & { error?: string; code?: string };
     try {

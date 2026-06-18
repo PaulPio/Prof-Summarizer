@@ -1,11 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': Deno.env.get('ALLOWED_ORIGIN') || '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, PUT, OPTIONS',
-};
+import { corsHeadersForRequest } from '../_shared/cors.ts';
 
 const encryptableFields: Record<string, string> = {
   geminiApiKey: 'gemini_api_key_enc',
@@ -32,6 +27,8 @@ function hasNotionConnection(row: Record<string, unknown>): boolean {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersForRequest(req, 'GET, PUT, OPTIONS');
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }

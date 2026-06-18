@@ -97,7 +97,8 @@ supabase link --project-ref YOUR_PROJECT_REF
 
 ```bash
 supabase secrets set APP_ENCRYPTION_KEY=your_32_char_random_secret
-supabase secrets set ALLOWED_ORIGIN=http://localhost:3000
+# Comma-separated; include every frontend origin (local + production)
+supabase secrets set ALLOWED_ORIGIN=http://localhost:3000,https://prof-summarizer.vercel.app
 ```
 
 `GEMINI_API_KEY` is **not** used as a platform fallback for signed-in users. Guests forward their own key from Settings (localStorage) on each AI request.
