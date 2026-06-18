@@ -5,6 +5,7 @@ node_modules/
 dist/
 .vite/
 *.tsbuildinfo
+*.zip
 
 # Environment & secrets
 .env
@@ -62,3 +63,4 @@ blob-report/
 .cache/
 .turbo/
 .parcel-cache/
+*.zip
