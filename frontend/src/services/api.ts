@@ -37,7 +37,7 @@ export async function callEdgeFunction<T>(functionName: string, body: Record<str
         }
         if (response.status === 546) {
             message =
-                'Study planner timed out on the server (limit ~2.5 min). Try a faster OpenRouter model (e.g. openai/gpt-4o-mini) in Settings → AI, or select fewer lectures.';
+                'The request timed out on the server (limit ~2.5 min). Try a faster model in Settings → AI, or retry with a shorter recording.';
         }
         throw new Error(message);
     }

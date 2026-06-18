@@ -121,6 +121,19 @@ Deno.serve(async (req) => {
       }
     }
 
+    const encryptableInBody = Object.keys(encryptableFields).filter(
+      (camel) => camel in body && body[camel] !== null && body[camel] !== '',
+    );
+    if (encryptableInBody.length > 0 && !encryptionKey) {
+      return new Response(JSON.stringify({
+        error: 'Server encryption is not configured. Contact the app administrator.',
+        code: 'ENCRYPTION_NOT_CONFIGURED',
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (encryptionKey) {
       for (const [camel, col] of Object.entries(encryptableFields)) {
         if (camel in body && body[camel] !== null && body[camel] !== '') {

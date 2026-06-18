@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * Deploy edge functions using Supabase Management API.
+ * Deploy all Edge Functions using the Supabase Management API.
  *
  * Prerequisites:
- *   1. supabase login   (creates ~/.supabase/access-token on some installs)
+ *   supabase login
  *   OR set SUPABASE_ACCESS_TOKEN from https://supabase.com/dashboard/account/tokens
  *
  * Usage:
  *   cd backend
- *   set SUPABASE_ACCESS_TOKEN=sbp_...
+ *   set SUPABASE_PROJECT_REF=your_project_ref
  *   node scripts/deploy-all-functions.mjs
  */
 import { readFileSync, readdirSync, statSync } from 'fs';
@@ -17,11 +17,20 @@ import { fileURLToPath } from 'url';
 import { homedir } from 'os';
 import { readFile } from 'fs/promises';
 
-const PROJECT_REF = 'sqlwvjbiququbvnqzvub';
-const FUNCTIONS = ['user-settings', 'notion-proxy', 'agent-run', 'list-ai-models'];
+const JWT_DISABLED = new Set(['notion-oauth-callback']);
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const root = join(__dirname, '..', 'supabase', 'functions');
+
+function discoverFunctions() {
+  return readdirSync(root)
+    .filter((name) => {
+      if (name.startsWith('_') || name.startsWith('.')) return false;
+      const fnDir = join(root, name);
+      return statSync(fnDir).isDirectory() && statSync(join(fnDir, 'index.ts')).isFile();
+    })
+    .sort();
+}
 
 async function getAccessToken() {
   if (process.env.SUPABASE_ACCESS_TOKEN) return process.env.SUPABASE_ACCESS_TOKEN;
@@ -39,6 +48,20 @@ async function getAccessToken() {
   }
   throw new Error(
     'No Supabase access token. Run: supabase login\nOr set SUPABASE_ACCESS_TOKEN from https://supabase.com/dashboard/account/tokens',
+  );
+}
+
+async function getProjectRef() {
+  if (process.env.SUPABASE_PROJECT_REF) return process.env.SUPABASE_PROJECT_REF;
+  const linked = join(__dirname, '..', '.temp', 'project-ref');
+  try {
+    const ref = (await readFile(linked, 'utf8')).trim();
+    if (ref) return ref;
+  } catch {
+    /* fall through */
+  }
+  throw new Error(
+    'Set SUPABASE_PROJECT_REF or run supabase link from backend/ so .temp/project-ref exists.',
   );
 }
 
@@ -69,11 +92,16 @@ function bundleFunction(fn) {
       content: readFileSync(join(sharedDir, name), 'utf8'),
     });
   }
-  return { name: fn, entrypoint_path: 'index.ts', verify_jwt: true, files };
+  return {
+    name: fn,
+    entrypoint_path: 'index.ts',
+    verify_jwt: !JWT_DISABLED.has(fn),
+    files,
+  };
 }
 
-async function deployFunction(token, bundle) {
-  const url = `https://api.supabase.com/v1/projects/${PROJECT_REF}/functions/deploy`;
+async function deployFunction(token, projectRef, bundle) {
+  const url = `https://api.supabase.com/v1/projects/${projectRef}/functions/deploy`;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -89,17 +117,18 @@ async function deployFunction(token, bundle) {
   return JSON.parse(text);
 }
 
+const FUNCTIONS = discoverFunctions();
 const token = await getAccessToken();
-console.log('Deploying to project', PROJECT_REF, '...\n');
+const projectRef = await getProjectRef();
+console.log(`Deploying ${FUNCTIONS.length} functions to project ${projectRef}...\n`);
 
 for (const fn of FUNCTIONS) {
   process.stdout.write(`  ${fn} ... `);
   const bundle = bundleFunction(fn);
-  const result = await deployFunction(token, bundle);
+  const result = await deployFunction(token, projectRef, bundle);
   console.log('OK', result.slug ?? result.name ?? '');
 }
 
-console.log('\nDone. Set secrets in Dashboard → Edge Functions → Secrets:');
-console.log('  ALLOWED_ORIGIN=http://localhost:3000');
+console.log('\nDone. Required secrets (Dashboard → Edge Functions → Secrets):');
 console.log('  APP_ENCRYPTION_KEY=<random-32-char-string>');
-console.log('  GEMINI_API_KEY=<your-key> (if not already set)');
+console.log('  ALLOWED_ORIGIN=https://your-app-url');

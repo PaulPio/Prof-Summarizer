@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AppState, LectureFile, SavedLecture } from '../types';
 import { API } from '../services/api';
@@ -274,15 +274,23 @@ const RecordPage: React.FC = () => {
   const continueL = [...scopedLectures].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
   const aiReady = hasConfiguredAi(userSettings);
 
+  const ensureAiReady = useCallback(() => {
+    if (hasConfiguredAi(userSettings)) return true;
+    navigate('/settings?tab=ai');
+    return false;
+  }, [userSettings, navigate]);
+
+  const handleImportAudioClick = useCallback(() => {
+    if (!ensureAiReady()) return;
+    audioInputRef.current?.click();
+  }, [ensureAiReady]);
+
   useEffect(() => {
     if ((status === AppState.REVIEWING || showSetup) && activeCourseId) setSelectedCourseId(activeCourseId);
   }, [status, showSetup, activeCourseId]);
 
   const handleOpenSetup = () => {
-    if (!aiReady) {
-      navigate('/settings?tab=ai');
-      return;
-    }
+    if (!ensureAiReady()) return;
     if (activeCourseId) setSelectedCourseId(activeCourseId);
     setShowSetup(true);
   };
@@ -291,12 +299,16 @@ const RecordPage: React.FC = () => {
   useEffect(() => {
     const state = location.state as { openRecord?: boolean } | null;
     if (state?.openRecord && status === AppState.IDLE) {
+      if (!hasConfiguredAi(userSettings)) {
+        navigate('/settings?tab=ai', { replace: true });
+        return;
+      }
       setShowSetup(true);
       if (activeCourseId) setSelectedCourseId(activeCourseId);
     } else if (!state?.openRecord && showSetup && status === AppState.IDLE) {
       setShowSetup(false);
     }
-  }, [location.key]); // location.key changes on every navigate() call, even same-path
+  }, [location.key, status, showSetup, activeCourseId, userSettings, navigate]); // location.key changes on every navigate() call
 
   const optimizeImage = (file: File): Promise<{ base64: string; previewUrl: string }> =>
     new Promise((resolve, reject) => {
@@ -364,6 +376,10 @@ const RecordPage: React.FC = () => {
   const onAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!ensureAiReady()) {
+      if (audioInputRef.current) audioInputRef.current.value = '';
+      return;
+    }
     if (!file.type.startsWith('audio/')) {
       setErrorMessage('Please upload an audio file (MP3, WAV, WebM, M4A, OGG)');
       setStatus(AppState.ERROR);
@@ -378,6 +394,7 @@ const RecordPage: React.FC = () => {
   };
 
   const startRecording = async () => {
+    if (!ensureAiReady()) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
       const mimeTypes = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm', 'audio/wav'];
@@ -415,6 +432,7 @@ const RecordPage: React.FC = () => {
 
   const finalizeLecture = async () => {
     if (!recordedBlob || !user) return;
+    if (!ensureAiReady()) return;
     setStatus(AppState.TRANSCRIBING);
     try {
       const reader = new FileReader();
@@ -542,7 +560,7 @@ const RecordPage: React.FC = () => {
                 </span>
                 <ArrowRight />
               </button>
-              <button className="btn" onClick={() => audioInputRef.current?.click()}>
+              <button className="btn" onClick={handleImportAudioClick}>
                 <UploadIcon /> Upload audio
               </button>
             </div>
@@ -572,7 +590,7 @@ const RecordPage: React.FC = () => {
             </svg>
             Record
           </button>
-          <button className="btn" onClick={() => audioInputRef.current?.click()}>
+          <button className="btn" onClick={handleImportAudioClick}>
             <UploadIcon /> Import audio
           </button>
         </TopBar>
@@ -665,7 +683,7 @@ const RecordPage: React.FC = () => {
                     <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="6.5" cy="6.5" r="3" /><circle cx="6.5" cy="6.5" r="5.5" strokeOpacity="0.3" /></svg>
                     Start recording
                   </button>
-                  <button className="btn" onClick={() => audioInputRef.current?.click()}><UploadIcon /></button>
+                  <button className="btn" onClick={handleImportAudioClick}><UploadIcon /></button>
                 </div>
               </div>
             </div>

@@ -143,7 +143,10 @@ export async function resolveAIConfigForRequest(
 
 export function aiConfigErrorResponse(err: unknown, corsHeaders: Record<string, string>): Response | null {
   if (err instanceof AIConfigError) {
-    const status = err.code === 'API_KEY_REQUIRED' || err.code === 'AI_NOT_CONFIGURED' ? 400 : 500;
+    const status =
+      err.code === 'API_KEY_REQUIRED' || err.code === 'AI_NOT_CONFIGURED' || err.code === 'AUTH_REQUIRED'
+        ? 400
+        : 500;
     return new Response(JSON.stringify({ error: err.message, code: err.code }), {
       status,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -153,9 +156,8 @@ export function aiConfigErrorResponse(err: unknown, corsHeaders: Record<string, 
 }
 
 async function getUserIdFromRequest(req: Request): Promise<string | null> {
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const token = authHeader.replace('Bearer ', '');
+  const token = getBearerToken(req);
+  if (!token) return null;
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const anonClient = createClient(supabaseUrl, anonKey);
@@ -163,12 +165,39 @@ async function getUserIdFromRequest(req: Request): Promise<string | null> {
   return user?.id ?? null;
 }
 
+function getBearerToken(req: Request): string | null {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  return authHeader.replace('Bearer ', '');
+}
+
+function isGuestAnonToken(token: string): boolean {
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  return Boolean(anonKey && token === anonKey);
+}
+
 export async function resolveAIConfigFromHttpRequest(
   req: Request,
   body: GuestAiForward,
 ): Promise<AIConfig> {
+  const token = getBearerToken(req);
+  if (!token) {
+    throw new AIConfigError('Authentication required.', 'AUTH_REQUIRED');
+  }
+
   const userId = await getUserIdFromRequest(req);
-  return resolveAIConfigForRequest(userId, body);
+  if (userId) {
+    return resolveAIConfigForRequest(userId, body);
+  }
+
+  if (!isGuestAnonToken(token)) {
+    throw new AIConfigError(
+      'Invalid or expired session. Sign in again or continue as guest with your API key in Settings.',
+      'AUTH_REQUIRED',
+    );
+  }
+
+  return resolveAIConfigForRequest(null, body);
 }
 
 async function decryptUserKey(

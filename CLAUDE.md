@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ProfSummarizer is an AI-powered lecture study companion. Users record or upload audio, get transcripts + AI-generated Cornell notes/flashcards/quizzes, and can chat with an "AI professor" about the material.
+ProfSummarizer is an AI-powered lecture study companion. Users record or upload audio, get transcripts + AI-generated Cornell notes/flashcards/quizzes, and can chat with an "AI professor" about the material. **BYOK only** — users supply their own API keys (encrypted for signed-in users; localStorage for guests).
 
 ## Repository Structure
 
@@ -14,7 +14,7 @@ Prof-Summarizer/
 ├── backend/
 │   └── supabase/
 │       ├── functions/  # Deno Edge Functions (11 total)
-│       ├── migrations/ # SQL schema migrations
+│       ├── migrations/ # SQL schema migrations (001–006)
 │       └── config.toml
 └── DESIGN.md           # Warm Campus design system spec
 ```
@@ -39,6 +39,7 @@ supabase functions deploy                # Deploy all Edge Functions
 supabase functions deploy <name>         # Deploy single function
 supabase db reset                        # Fresh DB + all migrations (local)
 supabase migration up                    # Apply pending migrations
+supabase db push                         # Apply migrations to linked remote
 supabase secrets set KEY=value           # Set backend secrets
 ```
 
@@ -51,49 +52,47 @@ supabase secrets set KEY=value           # Set backend secrets
 **State:** `AppContext` (`src/context/AppContext.tsx`) is the single source of truth for user, lectures, courses, settings, and agent jobs. Auth users sync from Supabase; guest users persist to `localStorage`.
 
 **Service layer** (`src/services/`):
-- `api.ts` — `callEdgeFunction(name, body)` wraps all backend calls with JWT auth headers
+- `api.ts` — `callEdgeFunction(name, body)` wraps backend calls; forwards guest AI keys when no session
+- `guestSettingsService.ts` — guest AI settings in localStorage
 - `storageService.ts` — CRUD for lectures/courses; branches on auth vs. guest
-- `settingsService.ts` — User settings CRUD
+- `settingsService.ts` — User settings CRUD (signed-in)
+- `aiModelsService.ts` — dynamic model catalog via `list-ai-models`
 - `agentService.ts` — Agent job orchestration
-- `notionService.ts` / `canvasService.ts` — Third-party integrations
+- `notionService.ts` — Notion OAuth + export
 
-**Routing** (`App.tsx`): `/record`, `/lecture/:id`, `/settings`, `/study-planner`, `/onboarding`
+**Routing** (`App.tsx`): `/`, `/lecture/:id`, `/settings`, `/inbox`, `/saved`, `/planner` (gated by `STUDY_PLANNER_ENABLED`)
 
-**3-column shell:** Course rail (w-56) → Lecture list panel (w-64) → Main content area
+**Feature flags:** `frontend/src/constants/featureFlags.ts` — `STUDY_PLANNER_ENABLED = false` hides study planner UI.
 
-**All types** are in `src/types.ts`: `SavedLecture`, `CornellNotes`, `Flashcard`, `QuizQuestion`, `UserSettings`, `Course`, `AgentJob`.
+**All types** are in `src/types.ts`.
 
 ### Backend (Supabase Edge Functions, Deno runtime)
 
-Each function lives in `backend/supabase/functions/<name>/index.ts`. Shared utilities are in `_shared/`:
-- `ai-provider.ts` — `resolveAIConfig(userId)` fetches user's provider + decrypts API key; falls back to platform Gemini key
-- `gemini.ts` — Gemini-specific helpers
-- `notion-oauth.ts` — Notion OAuth utilities
+Shared utilities in `_shared/`:
+- `ai-provider.ts` — `resolveAIConfigFromHttpRequest()` — signed-in: encrypted DB keys; guest: anon JWT + body-forwarded keys
+- `gemini.ts`, `list-models-utils.ts`, `notion-oauth.ts`
 
-**Functions:** `transcribe`, `summarize`, `chat`, `generate-flashcards`, `generate-quiz`, `ask-professor`, `export-notion`, `canvas-proxy`, `agent-run`, `notion-oauth-callback`, `list-models`
+**Functions:** `transcribe`, `summarize`, `chat`, `generate-flashcards`, `generate-quiz`, `user-settings`, `list-ai-models`, `agent-run`, `notion-oauth-start`, `notion-oauth-callback`, `notion-proxy`
 
-**AI providers supported:** Gemini (default platform key), OpenAI, Anthropic, OpenRouter (user-supplied keys, encrypted at rest)
+**AI providers:** Gemini, OpenAI, Anthropic, OpenRouter — user-supplied keys only (no platform fallback for signed-in users).
 
 ### Database Schema
 
-Key tables (all with RLS scoped to `user_id`):
+Key tables (RLS scoped to `user_id`):
 
-- **lectures** — `transcript`, `summary`, `cornell_notes`, `flashcards`, `quiz_data` (JSONB columns), `confusion_markers` (int[]), `course_id`
-- **courses** — `name`, `color`, `syllabus_file_path`
-- **user_settings** — `ai_provider`, `ai_model`, `*_api_key_enc` (encrypted), `notion_oauth_token_enc`, agent toggles
-- **agent_jobs** — `agent_type`, `status`, `result` (JSONB), `lecture_id`
+- **lectures**, **courses**, **user_settings**, **agent_jobs**, **study_plans**
 
-Migrations are plain SQL in `backend/supabase/migrations/` (no ORM). Always add new migrations rather than editing existing ones.
+Migrations: plain SQL in `backend/supabase/migrations/` (no ORM).
 
 ### Auth
 
-- **Auth users:** Google OAuth → Supabase JWT. All Edge Functions verify JWT; include `Authorization: Bearer <token>` header via `callEdgeFunction`.
-- **Guest mode:** No login; data in `localStorage` (`prof_summarizer_lectures_guest`, `prof_summarizer_courses_guest`).
-- **Exception:** `notion-oauth-callback` has `verify_jwt = false` in `config.toml` (Notion redirect doesn't carry JWT).
+- **Auth users:** Google OAuth → Supabase JWT on Edge Function calls.
+- **Guest mode:** Anon JWT + API keys forwarded in request body from `guestSettingsService`.
+- **Exception:** `notion-oauth-callback` has `verify_jwt = false` in `config.toml`.
 
 ## Environment Variables
 
-**Frontend** (`.env.local`):
+**Frontend** (`.env.local` or `.env`):
 ```
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
@@ -101,19 +100,15 @@ VITE_SUPABASE_ANON_KEY=
 
 **Backend** (set via `supabase secrets set`):
 ```
-GEMINI_API_KEY          # Platform-level default AI key
-APP_ENCRYPTION_KEY      # 32-char secret; encrypts user API keys + OAuth tokens
+APP_ENCRYPTION_KEY      # Required — 32-char secret; encrypts user API keys + OAuth tokens
 ALLOWED_ORIGIN          # CORS whitelist (e.g. http://localhost:3000)
-NOTION_CLIENT_ID
-NOTION_CLIENT_SECRET
-NOTION_OAUTH_REDIRECT_URI
+NOTION_CLIENT_ID / NOTION_CLIENT_SECRET / NOTION_OAUTH_REDIRECT_URI  # optional
 ```
 
 ## Key Conventions
 
-- **Styling:** Tailwind utilities only; no component library. Design tokens: cream `#faf8f5` background, amber-800 primary CTA. Fonts: DM Serif Display (headers) + Inter (body), loaded via CDN in `index.html`.
-- **Course colors:** Use `displayCourseColor()` helper — normalizes legacy color values.
-- **Edge Function errors:** Return `{ error: string, code: string }` JSON. Keep processing under 110s (hard timeout ~150s).
-- **Agent jobs:** Rate-limited to 10/user/hour. Heavy AI workloads (study planner) benefit from faster models like `openai/gpt-4o-mini`.
-- **User API keys:** Always encrypted server-side via `APP_ENCRYPTION_KEY`; never stored or logged in plaintext.
-- **RLS:** Every new table must have Row Level Security policies scoped to `user_id = auth.uid()`.
+- **Styling:** Tailwind via CDN; cream `#faf8f5` background, amber-800 primary CTA.
+- **Edge Function errors:** Return `{ error: string, code: string }` JSON.
+- **Agent jobs:** Rate-limited to 10/user/hour.
+- **User API keys:** Encrypted server-side via `APP_ENCRYPTION_KEY`; never logged in plaintext.
+- **RLS:** Every new table must have policies scoped to `user_id = auth.uid()`.

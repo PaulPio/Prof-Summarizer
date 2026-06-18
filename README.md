@@ -35,7 +35,7 @@ Prof-Summarizer/
 │   │   └── deploy-all-functions.mjs
 │   └── supabase/
 │       ├── config.toml
-│       ├── migrations/          # 001–005 SQL migrations
+│       ├── migrations/          # 001–006 SQL migrations
 │       └── functions/           # Edge Functions (see below)
 │
 ├── README.md
@@ -121,6 +121,7 @@ Schema is managed with SQL files in `backend/supabase/migrations/`:
 | `003_lectures_update_policy.sql` | RLS UPDATE on `lectures` |
 | `004_notion_oauth.sql` | Notion OAuth fields on `user_settings` |
 | `005_course_syllabi_remove_canvas.sql` | Course syllabi storage; removes Canvas integration |
+| `006_study_plans.sql` | Saved study plans from the study planner agent |
 
 Apply locally from `backend/`:
 

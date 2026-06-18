@@ -1,5 +1,4 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
   type AIProviderId,
   FALLBACK_MODELS,
@@ -22,17 +21,6 @@ type ListResponseBody = {
   source: 'live' | 'fallback';
   meta?: { curated?: boolean; error?: string };
 };
-
-async function getOptionalUserId(req: Request): Promise<string | null> {
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  const token = authHeader.replace('Bearer ', '');
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-  const anonClient = createClient(supabaseUrl, anonKey);
-  const { data: { user } } = await anonClient.auth.getUser(token);
-  return user?.id ?? null;
-}
 
 async function fetchOpenRouter(bearerOptional?: string): Promise<{ models?: ModelEntry[]; err?: string }> {
   const url =
@@ -112,8 +100,6 @@ Deno.serve(async (req) => {
       405,
     );
   }
-
-  await getOptionalUserId(req);
 
   let bodyRaw: Record<string, unknown>;
   try {
