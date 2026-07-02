@@ -289,9 +289,26 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
 
   const handleSaveAI = async () => {
     if (apiKeyError) return;
+
+    // Validate transcription provider has a key if configured
+    const txProvider = showTranscriptionPicker ? transcriptionProvider : null;
+    if (txProvider && txProvider !== selectedProvider) {
+      const keyMap: Record<string, keyof typeof userSettings> = {
+        gemini: 'hasGeminiKey',
+        openai: 'hasOpenAIKey',
+        anthropic: 'hasAnthropicKey',
+        openrouter: 'hasOpenRouterKey',
+      };
+      const hasKey = userSettings?.[keyMap[txProvider as keyof typeof keyMap]];
+      if (!hasKey && !apiKey.trim()) {
+        // If transcription provider differs and has no key, block save
+        setSaveError(`Add a ${txProvider} API key in Settings before setting it as your transcription provider.`);
+        return;
+      }
+    }
+
     setIsSaving(true); setSaveError(''); setSaveSuccess(false);
     try {
-      const txProvider = showTranscriptionPicker ? transcriptionProvider : null;
       const txModel = showTranscriptionPicker ? transcriptionModel : null;
       if (isGuest) {
         if (!apiKey.trim() && !hasKeyLabel()) {

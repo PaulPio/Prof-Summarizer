@@ -276,15 +276,40 @@ const RecordPage: React.FC = () => {
   const aiReady = hasConfiguredAi(userSettings);
 
   const ensureAiReady = useCallback(() => {
-    if (hasConfiguredAi(userSettings)) return true;
-    navigate('/settings?tab=ai');
-    return false;
+    if (!hasConfiguredAi(userSettings)) {
+      navigate('/settings?tab=ai');
+      return false;
+    }
+    // If a separate transcription provider is configured, ensure its key is set.
+    const txProvider = userSettings?.transcriptionProvider;
+    if (txProvider && txProvider !== userSettings?.aiProvider) {
+      const keyFields: Record<string, keyof typeof userSettings> = {
+        gemini: 'hasGeminiKey',
+        openai: 'hasOpenAIKey',
+        anthropic: 'hasAnthropicKey',
+        openrouter: 'hasOpenRouterKey',
+      };
+      if (!userSettings?.[keyFields[txProvider as keyof typeof keyFields]]) {
+        navigate('/settings?tab=ai');
+        return false;
+      }
+    }
+    return true;
   }, [userSettings, navigate]);
 
-  /** Returns true if the resolved transcription provider can handle audio. */
+  /** Returns true if the resolved transcription provider can handle audio AND has a key set. */
   const transcriptionProviderIsAudioCapable = useCallback(() => {
     const txProvider = userSettings?.transcriptionProvider ?? userSettings?.aiProvider;
     if (!txProvider) return true;
+    // Check if key exists for this provider
+    const keyFields: Record<string, keyof typeof userSettings> = {
+      gemini: 'hasGeminiKey',
+      openai: 'hasOpenAIKey',
+      anthropic: 'hasAnthropicKey',
+      openrouter: 'hasOpenRouterKey',
+    };
+    if (!userSettings?.[keyFields[txProvider as keyof typeof keyFields]]) return false;
+    // Check if provider supports audio
     if (txProvider === 'anthropic') return false;
     if (txProvider === 'openrouter') {
       const txModel = userSettings?.transcriptionModel ?? userSettings?.aiModel ?? '';
@@ -493,14 +518,27 @@ const RecordPage: React.FC = () => {
   /* ─── Audio provider warning modal ─── */
   if (showAudioProviderWarning) {
     const txProvider = userSettings?.transcriptionProvider ?? userSettings?.aiProvider;
+    const keyFields: Record<string, keyof typeof userSettings> = {
+      gemini: 'hasGeminiKey',
+      openai: 'hasOpenAIKey',
+      anthropic: 'hasAnthropicKey',
+      openrouter: 'hasOpenRouterKey',
+    };
+    const hasKey = txProvider && userSettings?.[keyFields[txProvider as keyof typeof keyFields]];
+    const isOpenRouterNonGemini = txProvider === 'openrouter' && !(userSettings?.transcriptionModel ?? userSettings?.aiModel ?? '').startsWith('google/');
+    const message = !hasKey
+      ? `No API key saved for your transcription provider. Please add your ${txProvider} key in Settings → AI.`
+      : txProvider === 'anthropic'
+      ? 'Anthropic/Claude cannot transcribe audio. Please set a separate transcription model (Gemini or OpenAI) in Settings → AI.'
+      : isOpenRouterNonGemini
+      ? 'The selected OpenRouter model may not support audio. Switch to a Google Gemini model or set a separate transcription provider in Settings → AI.'
+      : 'This provider does not support audio transcription.';
     return (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
         <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: 28, maxWidth: 420, width: '90%', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ fontSize: 18, fontWeight: 600 }}>⚠️ Provider doesn't support audio</div>
+          <div style={{ fontSize: 18, fontWeight: 600 }}>⚠️ {hasKey ? "Provider doesn't support audio" : 'Missing API key'}</div>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>
-            {txProvider === 'anthropic'
-              ? 'Anthropic/Claude cannot transcribe audio. Please set a separate transcription model (Gemini or OpenAI) in Settings → AI.'
-              : 'The selected OpenRouter model may not support audio. Switch to a Google Gemini model or set a separate transcription provider in Settings → AI.'}
+            {message}
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-accent" onClick={() => { setShowAudioProviderWarning(false); navigate('/settings?tab=ai'); }}>Go to Settings</button>

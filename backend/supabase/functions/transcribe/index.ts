@@ -22,10 +22,12 @@ Deno.serve(async (req) => {
         // signed-in users from user_settings, guests from body-forwarded fields.
         const aiConfig = await resolveTranscriptionConfigFromHttpRequest(req, body);
 
-        if (aiConfig.provider === 'anthropic') {
+        if (aiConfig.provider === 'anthropic' || aiConfig.provider === 'openrouter') {
+            const providerLabel = aiConfig.provider === 'anthropic' ? 'Anthropic/Claude' : 'OpenRouter';
+            const extra = aiConfig.provider === 'openrouter' ? ' (except Google Gemini models)' : '';
             return new Response(
                 JSON.stringify({
-                    error: 'Anthropic/Claude does not support audio transcription. Please select Gemini or OpenAI as your transcription provider in Settings → AI.',
+                    error: `${providerLabel} does not support audio transcription${extra}. Please select Gemini or OpenAI as your transcription provider in Settings → AI.`,
                     code: 'PROVIDER_UNSUPPORTED',
                 }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -39,7 +41,9 @@ Deno.serve(async (req) => {
             const model = aiConfig.model?.startsWith('whisper') ? aiConfig.model : 'whisper-1';
             const audioBytes = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
             const formData = new FormData();
-            formData.append('file', new Blob([audioBytes], { type: mimeType }), `audio.${mimeType.split('/')[1] || 'webm'}`);
+            const mimeBase = mimeType.split(';')[0]; // strip codec params
+            const ext = mimeBase.split('/')[1] || 'webm';
+            formData.append('file', new Blob([audioBytes], { type: mimeType }), `audio.${ext}`);
             formData.append('model', model);
             const whisperResp = await fetchWithTimeout('https://api.openai.com/v1/audio/transcriptions', {
                 method: 'POST',

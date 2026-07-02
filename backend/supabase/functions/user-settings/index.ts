@@ -28,6 +28,7 @@ const VALID_PROVIDERS = ['gemini', 'openai', 'anthropic', 'openrouter'];
 const providerFields = ['aiProvider', 'transcriptionProvider'];
 const stringFields = ['aiModel', 'transcriptionModel', 'notionDefaultPageId'];
 const booleanFields = ['hasCompletedOnboarding', 'agentStudyPlanner', 'agentAutoOrganizer', 'agentResearch', 'agentMultiStep'];
+const arrayFields = ['agentPipelineConfig'];
 
 /** Returns an error message for the first invalid field in the PUT body, or null. */
 function validatePlainFields(body: Record<string, unknown>): string | null {
@@ -44,6 +45,11 @@ function validatePlainFields(body: Record<string, unknown>): string | null {
   for (const f of booleanFields) {
     if (f in body && typeof body[f] !== 'boolean') {
       return `${f} must be a boolean`;
+    }
+  }
+  for (const f of arrayFields) {
+    if (f in body && body[f] !== null && !Array.isArray(body[f])) {
+      return `${f} must be an array`;
     }
   }
   return null;
@@ -220,6 +226,18 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Account deletion requires body {"confirm":"DELETE"}', code: 'CONFIRMATION_REQUIRED' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // Delete user's files from storage (syllabi, etc.)
+    const buckets = ['course-documents'];
+    for (const bucket of buckets) {
+      try {
+        const { data: files } = await adminClient.storage.from(bucket).list(user.id);
+        if (files && files.length > 0) {
+          const paths = files.map(f => `${user.id}/${f.name}`);
+          await adminClient.storage.from(bucket).remove(paths);
+        }
+      } catch { /* bucket or path doesn't exist */ }
     }
 
     // Permanently delete the user's data and auth account.

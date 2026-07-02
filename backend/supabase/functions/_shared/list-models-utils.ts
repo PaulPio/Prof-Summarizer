@@ -41,7 +41,7 @@ export function isAIProviderId(x: unknown): x is AIProviderId {
 export function isLikelyOpenAiChatModelId(id: string): boolean {
   const lower = id.toLowerCase();
   if (
-    /embed|embedding|tts|dall|moderation|realtime|audio|speech|davinci-|babbage|ada-|curie|gpt-image|omni-moderation|text-moderation|video|computer-use/.test(lower)
+    /embed|embedding|whisper|tts|dall|moderation|realtime|transcribe|audio|speech|davinci-|babbage|ada-|curie|gpt-image|omni-moderation|text-moderation|video|computer-use/.test(lower)
   ) {
     return false;
   }
