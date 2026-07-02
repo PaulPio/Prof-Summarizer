@@ -96,6 +96,8 @@ export interface UserSettings {
   hasCompletedOnboarding: boolean;
   aiProvider: AIProvider;
   aiModel: string;
+  transcriptionProvider?: AIProvider;
+  transcriptionModel?: string;
   hasGeminiKey: boolean;
   hasOpenAIKey: boolean;
   hasAnthropicKey: boolean;

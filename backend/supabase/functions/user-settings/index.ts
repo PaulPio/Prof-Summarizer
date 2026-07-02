@@ -14,6 +14,8 @@ const plainFields: Record<string, string> = {
   hasCompletedOnboarding: 'has_completed_onboarding',
   aiProvider: 'ai_provider',
   aiModel: 'ai_model',
+  transcriptionProvider: 'transcription_provider',
+  transcriptionModel: 'transcription_model',
   notionDefaultPageId: 'notion_default_page_id',
   agentStudyPlanner: 'agent_study_planner',
   agentAutoOrganizer: 'agent_auto_organizer',
@@ -22,12 +24,43 @@ const plainFields: Record<string, string> = {
   agentPipelineConfig: 'agent_pipeline_config',
 };
 
+const VALID_PROVIDERS = ['gemini', 'openai', 'anthropic', 'openrouter'];
+const providerFields = ['aiProvider', 'transcriptionProvider'];
+const stringFields = ['aiModel', 'transcriptionModel', 'notionDefaultPageId'];
+const booleanFields = ['hasCompletedOnboarding', 'agentStudyPlanner', 'agentAutoOrganizer', 'agentResearch', 'agentMultiStep'];
+const arrayFields = ['agentPipelineConfig'];
+
+/** Returns an error message for the first invalid field in the PUT body, or null. */
+function validatePlainFields(body: Record<string, unknown>): string | null {
+  for (const f of providerFields) {
+    if (f in body && body[f] !== null && !VALID_PROVIDERS.includes(body[f] as string)) {
+      return `${f} must be one of: ${VALID_PROVIDERS.join(', ')}`;
+    }
+  }
+  for (const f of stringFields) {
+    if (f in body && body[f] !== null && typeof body[f] !== 'string') {
+      return `${f} must be a string`;
+    }
+  }
+  for (const f of booleanFields) {
+    if (f in body && typeof body[f] !== 'boolean') {
+      return `${f} must be a boolean`;
+    }
+  }
+  for (const f of arrayFields) {
+    if (f in body && body[f] !== null && !Array.isArray(body[f])) {
+      return `${f} must be an array`;
+    }
+  }
+  return null;
+}
+
 function hasNotionConnection(row: Record<string, unknown>): boolean {
   return !!(row.notion_oauth_access_enc || row.notion_token_enc);
 }
 
 Deno.serve(async (req) => {
-  const corsHeaders = corsHeadersForRequest(req, 'GET, PUT, OPTIONS');
+  const corsHeaders = corsHeadersForRequest(req, 'GET, PUT, DELETE, OPTIONS');
 
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -79,6 +112,8 @@ Deno.serve(async (req) => {
       hasCompletedOnboarding: row.has_completed_onboarding ?? false,
       aiProvider: row.ai_provider ?? 'gemini',
       aiModel: row.ai_model ?? 'gemini-3.0-flash-preview',
+      transcriptionProvider: row.transcription_provider ?? undefined,
+      transcriptionModel: row.transcription_model ?? undefined,
       hasGeminiKey: !!row.gemini_api_key_enc,
       hasOpenAIKey: !!row.openai_api_key_enc,
       hasAnthropicKey: !!row.anthropic_api_key_enc,
@@ -101,6 +136,14 @@ Deno.serve(async (req) => {
 
   if (req.method === 'PUT') {
     const body = await req.json();
+
+    const validationError = validatePlainFields(body);
+    if (validationError) {
+      return new Response(JSON.stringify({ error: validationError, code: 'INVALID_INPUT' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const dbUpdate: Record<string, unknown> = {};
 
     if (body.disconnectNotion === true) {
@@ -167,6 +210,52 @@ Deno.serve(async (req) => {
       });
     }
 
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (req.method === 'DELETE') {
+    // Require explicit confirmation so a single stray/forged request can't destroy the account.
+    let confirm = '';
+    try {
+      const delBody = await req.json();
+      confirm = typeof delBody?.confirm === 'string' ? delBody.confirm : '';
+    } catch { /* no body */ }
+    if (confirm !== 'DELETE') {
+      return new Response(JSON.stringify({ error: 'Account deletion requires body {"confirm":"DELETE"}', code: 'CONFIRMATION_REQUIRED' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Delete user's files from storage (syllabi, etc.)
+    const buckets = ['course-documents'];
+    for (const bucket of buckets) {
+      try {
+        const { data: files } = await adminClient.storage.from(bucket).list(user.id);
+        if (files && files.length > 0) {
+          const paths = files.map(f => `${user.id}/${f.name}`);
+          await adminClient.storage.from(bucket).remove(paths);
+        }
+      } catch { /* bucket or path doesn't exist */ }
+    }
+
+    // Permanently delete the user's data and auth account.
+    const tables = ['agent_jobs', 'study_plans', 'lectures', 'courses', 'user_settings'];
+    for (const table of tables) {
+      const { error } = await adminClient.from(table).delete().eq('user_id', user.id);
+      if (error && error.code !== '42P01') { // ignore missing tables
+        return new Response(JSON.stringify({ error: `Failed to delete ${table}: ${error.message}`, code: 'INTERNAL_ERROR' }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+    const { error: authError } = await adminClient.auth.admin.deleteUser(user.id);
+    if (authError) {
+      return new Response(JSON.stringify({ error: `Failed to delete account: ${authError.message}`, code: 'INTERNAL_ERROR' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

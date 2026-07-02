@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { corsHeaders, callGemini } from '../_shared/gemini.ts';
+import { corsHeaders } from '../_shared/gemini.ts';
 import { resolveAIConfigFromHttpRequest, aiConfigErrorResponse, callAI } from '../_shared/ai-provider.ts';
 
 Deno.serve(async (req) => {
@@ -36,12 +36,7 @@ Answer the student's questions based on this specific lecture content. Be helpfu
             parts: [{ text: msg.content }],
         }));
 
-        let reply: string;
-        if (aiConfig.provider === 'gemini') {
-            reply = await callGemini(aiConfig.apiKey, systemInstruction, contents, undefined, 2048);
-        } else {
-            reply = await callAI(aiConfig, systemInstruction, contents, { maxOutputTokens: 2048 });
-        }
+        const reply = await callAI(aiConfig, systemInstruction, contents, { maxOutputTokens: 2048 });
 
         return new Response(
             JSON.stringify({ reply: reply || 'I apologize, I could not generate a response.' }),

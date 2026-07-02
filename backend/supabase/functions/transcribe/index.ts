@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { corsHeaders, callGemini } from '../_shared/gemini.ts';
-import { resolveAIConfigFromHttpRequest, aiConfigErrorResponse, callAI } from '../_shared/ai-provider.ts';
+import { corsHeaders } from '../_shared/gemini.ts';
+import { resolveTranscriptionConfigFromHttpRequest, aiConfigErrorResponse, callAI, fetchWithTimeout } from '../_shared/ai-provider.ts';
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
@@ -18,23 +18,55 @@ Deno.serve(async (req) => {
             );
         }
 
-        const aiConfig = await resolveAIConfigFromHttpRequest(req, body);
+        // Resolves the user's transcription provider (separate from main AI config if set):
+        // signed-in users from user_settings, guests from body-forwarded fields.
+        const aiConfig = await resolveTranscriptionConfigFromHttpRequest(req, body);
 
-        const systemInstruction = `You are a professional academic transcriber. Transcribe the audio exactly as spoken. Use [inaudible] for unclear sections. Preserve technical terms verbatim. Do not translate. Do not include preamble. Output only the transcription text.`;
-
-        const contents = [
-            {
-                parts: [
-                    { inlineData: { mimeType, data: audio } },
-                    { text: 'Please transcribe this lecture audio.' }
-                ]
-            }
-        ];
+        if (aiConfig.provider === 'anthropic' || aiConfig.provider === 'openrouter') {
+            const providerLabel = aiConfig.provider === 'anthropic' ? 'Anthropic/Claude' : 'OpenRouter';
+            const extra = aiConfig.provider === 'openrouter' ? ' (except Google Gemini models)' : '';
+            return new Response(
+                JSON.stringify({
+                    error: `${providerLabel} does not support audio transcription${extra}. Please select Gemini or OpenAI as your transcription provider in Settings → AI.`,
+                    code: 'PROVIDER_UNSUPPORTED',
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
 
         let transcript: string;
-        if (aiConfig.provider === 'gemini') {
-            transcript = await callGemini(aiConfig.apiKey, systemInstruction, contents, undefined, 8192);
+
+        if (aiConfig.provider === 'openai') {
+            // Use the dedicated Whisper endpoint for OpenAI
+            const model = aiConfig.model?.startsWith('whisper') ? aiConfig.model : 'whisper-1';
+            const audioBytes = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
+            const formData = new FormData();
+            const mimeBase = mimeType.split(';')[0]; // strip codec params
+            const ext = mimeBase.split('/')[1] || 'webm';
+            formData.append('file', new Blob([audioBytes], { type: mimeType }), `audio.${ext}`);
+            formData.append('model', model);
+            const whisperResp = await fetchWithTimeout('https://api.openai.com/v1/audio/transcriptions', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${aiConfig.apiKey}` },
+                body: formData,
+            });
+            if (!whisperResp.ok) {
+                const errText = await whisperResp.text();
+                throw new Error(`Whisper API error ${whisperResp.status}: ${errText}`);
+            }
+            const whisperData = await whisperResp.json() as { text?: string };
+            transcript = whisperData.text ?? '';
         } else {
+            // Gemini (direct or via OpenRouter) — pass inline audio
+            const systemInstruction = `You are a professional academic transcriber. Transcribe the audio exactly as spoken. Use [inaudible] for unclear sections. Preserve technical terms verbatim. Do not translate. Do not include preamble. Output only the transcription text.`;
+            const contents = [
+                {
+                    parts: [
+                        { inlineData: { mimeType, data: audio } },
+                        { text: 'Please transcribe this lecture audio.' }
+                    ]
+                }
+            ];
             transcript = await callAI(aiConfig, systemInstruction, contents, { maxOutputTokens: 8192 });
         }
 
