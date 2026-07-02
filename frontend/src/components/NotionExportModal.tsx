@@ -16,13 +16,15 @@ const NotionExportModal: React.FC<NotionExportModalProps> = ({ lecture, onClose 
   const [hubPageTitle, setHubPageTitle] = useState(`${lecture.title} — Lecture`);
   const [exportCornell, setExportCornell] = useState(!!lecture.cornellNotes);
   const [exportFlashcards, setExportFlashcards] = useState(!!lecture.flashcards?.length);
-  const [exportSummary, setExportSummary] = useState(true);
+  const [exportSummary, setExportSummary] = useState(!!lecture.summary?.overview);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadNonce, setLoadNonce] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
   const [results, setResults] = useState<NotionExportResult[]>([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    setIsLoading(true);
     NotionService.getPages()
       .then(data => {
         setPages(data);
@@ -32,7 +34,7 @@ const NotionExportModal: React.FC<NotionExportModalProps> = ({ lecture, onClose 
       })
       .catch(err => setError(err.message))
       .finally(() => setIsLoading(false));
-  }, [userSettings?.notionDefaultPageId]);
+  }, [userSettings?.notionDefaultPageId, loadNonce]);
 
   const handleExport = async () => {
     if (!selectedPageId) return;
@@ -112,9 +114,10 @@ const NotionExportModal: React.FC<NotionExportModalProps> = ({ lecture, onClose 
                 {isLoading ? (
                   <div className="h-10 bg-gray-100 rounded-xl animate-pulse" />
                 ) : pages.length === 0 ? (
-                  <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-                    No pages found. Share at least one page with your Notion integration, then reopen this modal.
-                  </p>
+                  <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center justify-between gap-3">
+                    <span>No pages found. Share at least one page with your Notion integration, then refresh.</span>
+                    <button type="button" className="shrink-0 text-xs font-semibold underline hover:no-underline" onClick={() => setLoadNonce(n => n + 1)}>Refresh</button>
+                  </div>
                 ) : (
                   <select
                     value={selectedPageId}
@@ -175,10 +178,12 @@ const NotionExportModal: React.FC<NotionExportModalProps> = ({ lecture, onClose 
                       <span className="text-sm text-gray-700">Flashcards ({lecture.flashcards.length} cards)</span>
                     </label>
                   ) : null}
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" checked={exportSummary} onChange={e => setExportSummary(e.target.checked)} className="rounded" />
-                    <span className="text-sm text-gray-700">Classic Summary</span>
-                  </label>
+                  {lecture.summary?.overview && (
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input type="checkbox" checked={exportSummary} onChange={e => setExportSummary(e.target.checked)} className="rounded" />
+                      <span className="text-sm text-gray-700">Classic Summary</span>
+                    </label>
+                  )}
                 </div>
               </div>
 

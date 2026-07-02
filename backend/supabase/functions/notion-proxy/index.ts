@@ -10,10 +10,10 @@ const corsHeaders = {
 };
 
 const ALLOWED_NOTION_PATHS: RegExp[] = [
-  /^\/v1\/pages(\/[a-z0-9-]+)?$/,
-  /^\/v1\/blocks\/[a-z0-9-]+\/children$/,
-  /^\/v1\/databases(\/[a-z0-9-]+\/query)?$/,
-  /^\/v1\/search$/,
+  /^\/v1\/pages(\/[a-z0-9-]+)?$/i,
+  /^\/v1\/blocks\/[a-z0-9-]+\/children$/i,
+  /^\/v1\/databases(\/[a-z0-9-]+\/query)?$/i,
+  /^\/v1\/search$/i,
 ];
 
 function isAllowedPath(path: string): boolean {
@@ -93,8 +93,15 @@ Deno.serve(async (req) => {
     });
   }
 
-  const body = req.method !== 'GET' ? await req.json() : null;
-  const notionPath: string = body?.notionPath || '';
+  // For GET requests, notionPath is passed as a query param since there's no body.
+  let body: Record<string, unknown> | null = null;
+  let notionPath: string = '';
+  if (req.method === 'GET') {
+    notionPath = new URL(req.url).searchParams.get('notionPath') || '';
+  } else {
+    body = await req.json();
+    notionPath = (body?.notionPath as string) || '';
+  }
 
   if (!notionPath || !isAllowedPath(notionPath)) {
     return new Response(JSON.stringify({ error: 'Notion path not allowed', code: 'FORBIDDEN' }), {
