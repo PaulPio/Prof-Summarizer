@@ -200,6 +200,109 @@ export async function resolveAIConfigFromHttpRequest(
   return resolveAIConfigForRequest(null, body);
 }
 
+export type GuestTranscriptionForward = GuestAiForward & {
+  transcriptionProvider?: unknown;
+  transcriptionModel?: unknown;
+  transcriptionApiKey?: unknown;
+};
+
+/**
+ * Resolve the config to use for audio transcription. Users may set a separate
+ * transcription provider/model; if none is set, the main AI config is used.
+ * Signed-in: reads transcription_provider/transcription_model and the matching
+ * provider's encrypted key from user_settings. Guest: uses body-forwarded fields.
+ */
+export async function resolveTranscriptionConfigFromHttpRequest(
+  req: Request,
+  body: GuestTranscriptionForward,
+): Promise<AIConfig> {
+  const token = getBearerToken(req);
+  if (!token) {
+    throw new AIConfigError('Authentication required.', 'AUTH_REQUIRED');
+  }
+
+  const userId = await getUserIdFromRequest(req);
+  if (userId) {
+    return resolveTranscriptionConfigForUser(userId);
+  }
+
+  if (!isGuestAnonToken(token)) {
+    throw new AIConfigError(
+      'Invalid or expired session. Sign in again or continue as guest with your API key in Settings.',
+      'AUTH_REQUIRED',
+    );
+  }
+
+  // Guest: use forwarded transcription override when present and complete.
+  const txProviderRaw = typeof body.transcriptionProvider === 'string' ? body.transcriptionProvider : '';
+  if (isAIProvider(txProviderRaw)) {
+    const txKey = typeof body.transcriptionApiKey === 'string' ? body.transcriptionApiKey.trim() : '';
+    const mainProvider = typeof body.aiProvider === 'string' ? body.aiProvider : '';
+    const mainKey = typeof body.aiApiKey === 'string' ? body.aiApiKey.trim() : '';
+    // Only fall back to the main key when the transcription provider is the same provider.
+    const apiKey = txKey || (txProviderRaw === mainProvider ? mainKey : '');
+    if (!apiKey) {
+      throw new AIConfigError(
+        `Add your ${PROVIDER_LABELS[txProviderRaw]} API key in Settings → AI to use it for transcription.`,
+        'API_KEY_REQUIRED',
+      );
+    }
+    const model = typeof body.transcriptionModel === 'string' && body.transcriptionModel.trim()
+      ? body.transcriptionModel.trim()
+      : DEFAULT_MODELS[txProviderRaw];
+    return { provider: txProviderRaw, apiKey, model };
+  }
+
+  return resolveAIConfigForRequest(null, body);
+}
+
+async function resolveTranscriptionConfigForUser(userId: string): Promise<AIConfig> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const encryptionKey = Deno.env.get('APP_ENCRYPTION_KEY');
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('ai_provider, ai_model, transcription_provider, transcription_model, gemini_api_key_enc, openai_api_key_enc, anthropic_api_key_enc, openrouter_api_key_enc')
+    .eq('user_id', userId)
+    .single();
+
+  if (error || !data) {
+    throw new AIConfigError(
+      'Configure an AI provider and API key in Settings → AI.',
+      'AI_NOT_CONFIGURED',
+    );
+  }
+
+  const row = data as UserSettingsRow & { transcription_provider?: string | null; transcription_model?: string | null };
+
+  // No separate transcription provider — use the main config.
+  if (!isAIProvider(row.transcription_provider)) {
+    return resolveAIConfig(userId);
+  }
+
+  const provider = row.transcription_provider;
+  const model = row.transcription_model || DEFAULT_MODELS[provider];
+  const encValue = row[PROVIDER_KEY_COLUMNS[provider] as keyof UserSettingsRow] as string | null;
+
+  if (!encValue) {
+    throw new AIConfigError(
+      `Add your ${PROVIDER_LABELS[provider]} API key in Settings → AI to use it for transcription.`,
+      'API_KEY_REQUIRED',
+    );
+  }
+  if (!encryptionKey) {
+    throw new AIConfigError(
+      'Server encryption is not configured. Contact the app administrator.',
+      'ENCRYPTION_NOT_CONFIGURED',
+    );
+  }
+
+  const apiKey = await decryptUserKey(supabase, encValue, encryptionKey, provider);
+  return { provider, apiKey, model };
+}
+
 async function decryptUserKey(
   supabase: ReturnType<typeof createClient>,
   encValue: string,

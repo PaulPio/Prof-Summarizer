@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders } from '../_shared/gemini.ts';
-import { resolveAIConfigFromHttpRequest, aiConfigErrorResponse, callAI } from '../_shared/ai-provider.ts';
+import { resolveTranscriptionConfigFromHttpRequest, aiConfigErrorResponse, callAI } from '../_shared/ai-provider.ts';
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
@@ -18,16 +18,9 @@ Deno.serve(async (req) => {
             );
         }
 
-        // Support an optional separate transcription provider/model/key distinct from the main AI config.
-        // If the request body carries transcriptionProvider, use it; otherwise fall back to the main config.
-        const baseConfig = await resolveAIConfigFromHttpRequest(req, body);
-        const aiConfig = body.transcriptionProvider
-            ? {
-                provider: body.transcriptionProvider as typeof baseConfig.provider,
-                model: body.transcriptionModel ?? baseConfig.model,
-                apiKey: body.transcriptionApiKey ?? baseConfig.apiKey,
-              }
-            : baseConfig;
+        // Resolves the user's transcription provider (separate from main AI config if set):
+        // signed-in users from user_settings, guests from body-forwarded fields.
+        const aiConfig = await resolveTranscriptionConfigFromHttpRequest(req, body);
 
         if (aiConfig.provider === 'anthropic') {
             return new Response(

@@ -14,6 +14,8 @@ const plainFields: Record<string, string> = {
   hasCompletedOnboarding: 'has_completed_onboarding',
   aiProvider: 'ai_provider',
   aiModel: 'ai_model',
+  transcriptionProvider: 'transcription_provider',
+  transcriptionModel: 'transcription_model',
   notionDefaultPageId: 'notion_default_page_id',
   agentStudyPlanner: 'agent_study_planner',
   agentAutoOrganizer: 'agent_auto_organizer',
@@ -27,7 +29,7 @@ function hasNotionConnection(row: Record<string, unknown>): boolean {
 }
 
 Deno.serve(async (req) => {
-  const corsHeaders = corsHeadersForRequest(req, 'GET, PUT, OPTIONS');
+  const corsHeaders = corsHeadersForRequest(req, 'GET, PUT, DELETE, OPTIONS');
 
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -79,6 +81,8 @@ Deno.serve(async (req) => {
       hasCompletedOnboarding: row.has_completed_onboarding ?? false,
       aiProvider: row.ai_provider ?? 'gemini',
       aiModel: row.ai_model ?? 'gemini-3.0-flash-preview',
+      transcriptionProvider: row.transcription_provider ?? undefined,
+      transcriptionModel: row.transcription_model ?? undefined,
       hasGeminiKey: !!row.gemini_api_key_enc,
       hasOpenAIKey: !!row.openai_api_key_enc,
       hasAnthropicKey: !!row.anthropic_api_key_enc,
@@ -167,6 +171,28 @@ Deno.serve(async (req) => {
       });
     }
 
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (req.method === 'DELETE') {
+    // Permanently delete the user's data and auth account.
+    const tables = ['agent_jobs', 'study_plans', 'lectures', 'courses', 'user_settings'];
+    for (const table of tables) {
+      const { error } = await adminClient.from(table).delete().eq('user_id', user.id);
+      if (error && error.code !== '42P01') { // ignore missing tables
+        return new Response(JSON.stringify({ error: `Failed to delete ${table}: ${error.message}`, code: 'INTERNAL_ERROR' }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+    const { error: authError } = await adminClient.auth.admin.deleteUser(user.id);
+    if (authError) {
+      return new Response(JSON.stringify({ error: `Failed to delete account: ${authError.message}`, code: 'INTERNAL_ERROR' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

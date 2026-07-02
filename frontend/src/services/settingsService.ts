@@ -60,4 +60,19 @@ export const SettingsService = {
   disconnectNotion: async (): Promise<void> => {
     await SettingsService.updateSettings({ disconnectNotion: true });
   },
+
+  /** Permanently deletes the user's data and auth account. */
+  deleteAccount: async (): Promise<void> => {
+    const headers = await getSupabaseFunctionAuthHeaders();
+    let response: Response;
+    try {
+      response = await fetch(`${FUNCTIONS_URL}/user-settings`, { method: 'DELETE', headers });
+    } catch (err) {
+      throw wrapFetchError(err, 'Delete account');
+    }
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || 'Failed to delete account');
+    }
+  },
 };

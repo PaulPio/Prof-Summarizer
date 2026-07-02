@@ -113,7 +113,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
   // Danger zone state
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [agentToggles, setAgentToggles] = useState({
     agentStudyPlanner: false,
     agentAutoOrganizer: false,
@@ -752,36 +752,24 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
             {activeSection === 'danger' && (
               <SectionContent title="Danger zone">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {showResetConfirm ? (
-                    <div style={{ padding: '14px 16px', borderRadius: 'var(--r)', border: '1px solid var(--bad-soft)', background: 'var(--bg-elev)' }}>
-                      <p style={{ fontSize: 13, color: 'var(--text)', marginBottom: 12 }}>Reset all SRS progress? Your flashcards remain but ratings are cleared.</p>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn" style={{ color: 'var(--bad)', borderColor: 'var(--bad-soft)' }} onClick={async () => {
-                          try {
-                            await SettingsService.updateSettings({ resetFlashcardProgress: true });
-                            setSaveSuccess(true); setTimeout(() => setSaveSuccess(false), 3000);
-                          } catch { setSaveError('Failed to reset progress.'); }
-                          setShowResetConfirm(false);
-                        }}>Confirm reset</button>
-                        <button className="btn" onClick={() => setShowResetConfirm(false)}>Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <DangerRow
-                      label="Wipe flashcard progress"
-                      desc="Reset all SRS progress. Your flashcards remain but ratings are cleared."
-                      action="Reset progress"
-                      onAction={() => setShowResetConfirm(true)}
-                    />
-                  )}
+                  {/* Flashcard SRS ratings are session-only local state — there is no persisted progress to reset. */}
                   {showDeleteConfirm ? (
                     <div style={{ padding: '14px 16px', borderRadius: 'var(--r)', border: '1px solid var(--bad)', background: 'var(--bg-elev)' }}>
                       <p style={{ fontSize: 13, color: 'var(--text)', marginBottom: 4 }}>This will permanently delete your account and all data. This cannot be undone.</p>
                       <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>Type <strong>DELETE</strong> to confirm:</p>
                       <input type="text" value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)} placeholder="DELETE" style={{ ...inputStyle, marginBottom: 12, borderColor: 'var(--bad-soft)' }} />
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn" style={{ color: 'var(--bad)', borderColor: 'var(--bad)' }} disabled={deleteConfirmText !== 'DELETE'} onClick={onLogout}>Delete my account</button>
-                        <button className="btn" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}>Cancel</button>
+                        <button className="btn" style={{ color: 'var(--bad)', borderColor: 'var(--bad)' }} disabled={deleteConfirmText !== 'DELETE' || isDeleting} onClick={async () => {
+                          setIsDeleting(true); setSaveError('');
+                          try {
+                            if (!isGuest) await SettingsService.deleteAccount();
+                            onLogout();
+                          } catch (err: unknown) {
+                            setSaveError(err instanceof Error ? err.message : 'Failed to delete account');
+                            setIsDeleting(false);
+                          }
+                        }}>{isDeleting ? 'Deleting…' : 'Delete my account'}</button>
+                        <button className="btn" disabled={isDeleting} onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}>Cancel</button>
                       </div>
                     </div>
                   ) : (
