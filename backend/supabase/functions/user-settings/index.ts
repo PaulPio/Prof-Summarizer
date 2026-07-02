@@ -24,6 +24,31 @@ const plainFields: Record<string, string> = {
   agentPipelineConfig: 'agent_pipeline_config',
 };
 
+const VALID_PROVIDERS = ['gemini', 'openai', 'anthropic', 'openrouter'];
+const providerFields = ['aiProvider', 'transcriptionProvider'];
+const stringFields = ['aiModel', 'transcriptionModel', 'notionDefaultPageId'];
+const booleanFields = ['hasCompletedOnboarding', 'agentStudyPlanner', 'agentAutoOrganizer', 'agentResearch', 'agentMultiStep'];
+
+/** Returns an error message for the first invalid field in the PUT body, or null. */
+function validatePlainFields(body: Record<string, unknown>): string | null {
+  for (const f of providerFields) {
+    if (f in body && body[f] !== null && !VALID_PROVIDERS.includes(body[f] as string)) {
+      return `${f} must be one of: ${VALID_PROVIDERS.join(', ')}`;
+    }
+  }
+  for (const f of stringFields) {
+    if (f in body && body[f] !== null && typeof body[f] !== 'string') {
+      return `${f} must be a string`;
+    }
+  }
+  for (const f of booleanFields) {
+    if (f in body && typeof body[f] !== 'boolean') {
+      return `${f} must be a boolean`;
+    }
+  }
+  return null;
+}
+
 function hasNotionConnection(row: Record<string, unknown>): boolean {
   return !!(row.notion_oauth_access_enc || row.notion_token_enc);
 }
@@ -105,6 +130,14 @@ Deno.serve(async (req) => {
 
   if (req.method === 'PUT') {
     const body = await req.json();
+
+    const validationError = validatePlainFields(body);
+    if (validationError) {
+      return new Response(JSON.stringify({ error: validationError, code: 'INVALID_INPUT' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const dbUpdate: Record<string, unknown> = {};
 
     if (body.disconnectNotion === true) {
@@ -177,6 +210,18 @@ Deno.serve(async (req) => {
   }
 
   if (req.method === 'DELETE') {
+    // Require explicit confirmation so a single stray/forged request can't destroy the account.
+    let confirm = '';
+    try {
+      const delBody = await req.json();
+      confirm = typeof delBody?.confirm === 'string' ? delBody.confirm : '';
+    } catch { /* no body */ }
+    if (confirm !== 'DELETE') {
+      return new Response(JSON.stringify({ error: 'Account deletion requires body {"confirm":"DELETE"}', code: 'CONFIRMATION_REQUIRED' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Permanently delete the user's data and auth account.
     const tables = ['agent_jobs', 'study_plans', 'lectures', 'courses', 'user_settings'];
     for (const table of tables) {

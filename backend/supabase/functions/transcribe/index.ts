@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders } from '../_shared/gemini.ts';
-import { resolveTranscriptionConfigFromHttpRequest, aiConfigErrorResponse, callAI } from '../_shared/ai-provider.ts';
+import { resolveTranscriptionConfigFromHttpRequest, aiConfigErrorResponse, callAI, fetchWithTimeout } from '../_shared/ai-provider.ts';
 
 Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
             const formData = new FormData();
             formData.append('file', new Blob([audioBytes], { type: mimeType }), `audio.${mimeType.split('/')[1] || 'webm'}`);
             formData.append('model', model);
-            const whisperResp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+            const whisperResp = await fetchWithTimeout('https://api.openai.com/v1/audio/transcriptions', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${aiConfig.apiKey}` },
                 body: formData,

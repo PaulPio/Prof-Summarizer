@@ -66,7 +66,11 @@ export const SettingsService = {
     const headers = await getSupabaseFunctionAuthHeaders();
     let response: Response;
     try {
-      response = await fetch(`${FUNCTIONS_URL}/user-settings`, { method: 'DELETE', headers });
+      response = await fetch(`${FUNCTIONS_URL}/user-settings`, {
+        method: 'DELETE',
+        headers,
+        body: JSON.stringify({ confirm: 'DELETE' }),
+      });
     } catch (err) {
       throw wrapFetchError(err, 'Delete account');
     }

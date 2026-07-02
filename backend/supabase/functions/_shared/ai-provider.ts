@@ -325,7 +325,7 @@ async function decryptUserKey(
   return decryptResult as string;
 }
 
-async function fetchWithTimeout(
+export async function fetchWithTimeout(
   url: string,
   init: RequestInit,
   timeoutMs = AI_REQUEST_TIMEOUT_MS,
