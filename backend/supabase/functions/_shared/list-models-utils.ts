@@ -16,14 +16,12 @@ export const FALLBACK_MODELS: Record<AIProviderId, ModelEntry[]> = {
     { id: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
   ],
   anthropic: [
-    { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
-    { id: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
-    { id: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet' },
+    { id: 'claude-opus-4-5', label: 'Claude Opus 4.5' },
+    { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
+    { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
     { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
     { id: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
     { id: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
-    { id: 'claude-3-sonnet-20240229', label: 'Claude 3 Sonnet' },
     { id: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku' },
   ],
   openrouter: [
@@ -43,7 +41,7 @@ export function isAIProviderId(x: unknown): x is AIProviderId {
 export function isLikelyOpenAiChatModelId(id: string): boolean {
   const lower = id.toLowerCase();
   if (
-    /embed|embedding|whisper|tts|dall|moderation|realtime|transcribe|audio|speech|davinci-|babbage|ada-|curie|gpt-image|omni-moderation|text-moderation|video|computer-use/.test(lower)
+    /embed|embedding|tts|dall|moderation|realtime|audio|speech|davinci-|babbage|ada-|curie|gpt-image|omni-moderation|text-moderation|video|computer-use/.test(lower)
   ) {
     return false;
   }

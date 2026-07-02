@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { corsHeaders, callGemini } from '../_shared/gemini.ts';
+import { corsHeaders } from '../_shared/gemini.ts';
 import { resolveAIConfigFromHttpRequest, aiConfigErrorResponse, callAI } from '../_shared/ai-provider.ts';
 
 function sanitizeLectureTitle(raw: unknown): string {
@@ -92,12 +92,7 @@ Generate a comprehensive study guide in a single JSON response with:
 
         const contents = [{ parts }];
 
-        let result: string;
-        if (aiConfig.provider === 'gemini') {
-            result = await callGemini(aiConfig.apiKey, systemInstruction, contents, responseSchema, 4096);
-        } else {
-            result = await callAI(aiConfig, systemInstruction, contents, { schema: responseSchema, maxOutputTokens: 4096 });
-        }
+        const result = await callAI(aiConfig, systemInstruction, contents, { schema: responseSchema, maxOutputTokens: 4096 });
 
         const parsed = JSON.parse(result);
         const cornellNotes = parsed.cornell;

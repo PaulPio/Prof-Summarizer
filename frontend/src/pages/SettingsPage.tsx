@@ -8,7 +8,7 @@ import CoursesSetupPanel from '../components/CoursesSetupPanel';
 import NotionConnectPanel from '../components/NotionConnectPanel';
 import TopBar from '../components/TopBar';
 import { STUDY_PLANNER_ENABLED } from '../constants/featureFlags';
-import { GuestSettingsService } from '../services/guestSettingsService';
+import { GuestSettingsService, validateApiKeyFormat } from '../services/guestSettingsService';
 
 const AI_PROVIDERS: { id: AIProvider; label: string }[] = [
   { id: 'gemini', label: 'Google Gemini' },
@@ -91,6 +91,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>('gemini');
   const [selectedModel, setSelectedModel] = useState('gemini-3.0-flash-preview');
   const [apiKey, setApiKey] = useState('');
+  const [apiKeyError, setApiKeyError] = useState('');
   const [debouncedApiKey, setDebouncedApiKey] = useState('');
   const [availableModels, setAvailableModels] = useState<ModelEntry[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -101,6 +102,18 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
   const [modelSearch, setModelSearch] = useState('');
   const [customModelMode, setCustomModelMode] = useState(false);
   const [reloadModelsNonce, setReloadModelsNonce] = useState(0);
+
+  // Transcription model (separate from main AI provider)
+  const [showTranscriptionPicker, setShowTranscriptionPicker] = useState(false);
+  const [transcriptionProvider, setTranscriptionProvider] = useState<AIProvider | null>(null);
+  const [transcriptionModel, setTranscriptionModel] = useState('');
+  const [txModels, setTxModels] = useState<ModelEntry[]>([]);
+  const [txModelsLoading, setTxModelsLoading] = useState(false);
+
+  // Danger zone state
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [agentToggles, setAgentToggles] = useState({
     agentStudyPlanner: false,
     agentAutoOrganizer: false,
@@ -116,6 +129,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
     if (userSettings) {
       setSelectedProvider(userSettings.aiProvider);
       setSelectedModel(userSettings.aiModel);
+      if (userSettings.transcriptionProvider) {
+        setTranscriptionProvider(userSettings.transcriptionProvider);
+        setTranscriptionModel(userSettings.transcriptionModel ?? '');
+        setShowTranscriptionPicker(true);
+      }
       setAgentToggles({
         agentStudyPlanner: userSettings.agentStudyPlanner,
         agentAutoOrganizer: userSettings.agentAutoOrganizer,
@@ -159,6 +177,21 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
     })();
     return () => { cancelled = true; };
   }, [activeSection, selectedProvider, debouncedApiKey, reloadModelsNonce]);
+
+  // Load models for the transcription provider picker
+  useEffect(() => {
+    if (!showTranscriptionPicker || !transcriptionProvider) return;
+    let cancelled = false;
+    void (async () => {
+      setTxModelsLoading(true);
+      try {
+        const res = await AiModelsService.listModels(transcriptionProvider, undefined);
+        if (!cancelled) setTxModels(res.models);
+      } catch { if (!cancelled) setTxModels([]); }
+      finally { if (!cancelled) setTxModelsLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [showTranscriptionPicker, transcriptionProvider]);
 
   useEffect(() => {
     if (modelsLoading || !availableModels.length || customModelMode) return;
@@ -244,9 +277,22 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
     return map[selectedProvider] ? '(key saved)' : '';
   };
 
+  const handleApiKeyChange = (value: string) => {
+    setApiKey(value);
+    if (value.trim()) {
+      const err = validateApiKeyFormat(selectedProvider, value.trim());
+      setApiKeyError(err ?? '');
+    } else {
+      setApiKeyError('');
+    }
+  };
+
   const handleSaveAI = async () => {
+    if (apiKeyError) return;
     setIsSaving(true); setSaveError(''); setSaveSuccess(false);
     try {
+      const txProvider = showTranscriptionPicker ? transcriptionProvider : null;
+      const txModel = showTranscriptionPicker ? transcriptionModel : null;
       if (isGuest) {
         if (!apiKey.trim() && !hasKeyLabel()) {
           setSaveError('Add an API key for your selected provider before saving.');
@@ -255,6 +301,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
         const raw = GuestSettingsService.save({
           aiProvider: selectedProvider,
           aiModel: selectedModel,
+          transcriptionProvider: txProvider,
+          transcriptionModel: txModel,
           apiKey: apiKey.trim() || undefined,
           providerForKey: selectedProvider,
         });
@@ -264,7 +312,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
         setTimeout(() => setSaveSuccess(false), 3000);
         return;
       }
-      const patch: Record<string, unknown> = { aiProvider: selectedProvider, aiModel: selectedModel };
+      const patch: Record<string, unknown> = {
+        aiProvider: selectedProvider,
+        aiModel: selectedModel,
+        transcriptionProvider: txProvider ?? null,
+        transcriptionModel: txModel ?? null,
+      };
       const keyField: Record<AIProvider, string> = { gemini: 'geminiApiKey', openai: 'openaiApiKey', anthropic: 'anthropicApiKey', openrouter: 'openrouterApiKey' };
       if (apiKey.trim()) patch[keyField[selectedProvider]] = apiKey.trim();
       await SettingsService.updateSettings(patch);
@@ -505,16 +558,66 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
                   )}
                 </SettingBlock>
 
+                {/* Audio-incapable provider warning */}
+                {(selectedProvider === 'anthropic' && !showTranscriptionPicker) && (
+                  <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 'var(--r)', background: 'var(--confuse-soft)', border: '1px solid var(--confuse)', color: 'var(--text)', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+                    <span>Anthropic/Claude doesn't support audio transcription. Set a separate transcription model below, or recording and import won't work.</span>
+                  </div>
+                )}
+                {(selectedProvider === 'openrouter' && selectedModel && !selectedModel.startsWith('google/') && !showTranscriptionPicker) && (
+                  <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 'var(--r)', background: 'var(--confuse-soft)', border: '1px solid var(--confuse)', color: 'var(--text)', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+                    <span>The selected OpenRouter model may not support audio. Only Google Gemini models (e.g. <code>google/gemini-2.5-flash-preview-05-20</code>) can transcribe audio. Set a separate transcription model below if needed.</span>
+                  </div>
+                )}
+
                 <SettingBlock label={`${API_KEY_LABELS[selectedProvider]}${hasKeyLabel() ? ' (key saved)' : ''}`}>
-                  <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder={hasKeyLabel() ? 'Enter new key to replace…' : 'Paste your API key…'} style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} />
+                  <input type="password" value={apiKey} onChange={e => handleApiKeyChange(e.target.value)} placeholder={hasKeyLabel() ? 'Enter new key to replace…' : 'Paste your API key…'} style={{ ...inputStyle, fontFamily: 'var(--font-mono)', borderColor: apiKeyError ? 'var(--bad)' : undefined }} />
+                  {apiKeyError && <div style={{ fontSize: 11, color: 'var(--bad)', marginTop: 4 }}>⚠️ {apiKeyError}</div>}
                   <div style={{ fontSize: 11, color: 'var(--text-soft)', marginTop: 4 }}>
                     {isGuest
-                      ? 'Stored locally in your browser only. Never shared except with your chosen AI provider when you transcribe or study.'
+                      ? 'Stored locally in your browser only (expires in 30 days). Sign in to encrypt keys server-side.'
                       : 'Leave blank to keep existing key. Keys are encrypted before storage.'}
                   </div>
                 </SettingBlock>
 
-                <button className="btn btn-accent" onClick={handleSaveAI} disabled={isSaving} style={{ marginTop: 8 }}>
+                {/* Transcription model picker */}
+                <SettingBlock label="Transcription model">
+                  <div style={{ marginBottom: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={showTranscriptionPicker} onChange={e => { setShowTranscriptionPicker(e.target.checked); if (!e.target.checked) { setTranscriptionProvider(null); setTranscriptionModel(''); } }} style={{ accentColor: 'var(--accent)' }} />
+                      Use a separate model for audio transcription
+                    </label>
+                  </div>
+                  {showTranscriptionPicker && (
+                    <div style={{ padding: '12px 14px', borderRadius: 'var(--r)', border: '1px solid var(--border)', background: 'var(--bg-sunken)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                        Choose Gemini or OpenAI (Whisper) for transcription. Anthropic cannot transcribe audio.
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {(['gemini', 'openai'] as AIProvider[]).map(p => (
+                          <button key={p} type="button" onClick={() => { setTranscriptionProvider(p); setTranscriptionModel(''); }} style={{ flex: 1, padding: '8px 10px', borderRadius: 'var(--r)', border: `2px solid ${transcriptionProvider === p ? 'var(--accent)' : 'var(--border)'}`, background: transcriptionProvider === p ? 'var(--accent-soft)' : 'var(--bg)', cursor: 'pointer', fontSize: 12, fontWeight: 500, color: 'var(--text)' }}>
+                            {p === 'gemini' ? 'Google Gemini' : 'OpenAI (Whisper)'}
+                          </button>
+                        ))}
+                      </div>
+                      {transcriptionProvider && (
+                        txModelsLoading ? (
+                          <div style={{ fontSize: 11, color: 'var(--text-soft)' }}>Loading models…</div>
+                        ) : (
+                          <select value={transcriptionModel} onChange={e => setTranscriptionModel(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                            <option value="">Default model</option>
+                            {txModels.map(m => <option key={m.id} value={m.id}>{m.label ? `${m.label} — ${m.id}` : m.id}</option>)}
+                            {transcriptionProvider === 'openai' && <option value="whisper-1">Whisper 1 (transcription)</option>}
+                          </select>
+                        )
+                      )}
+                    </div>
+                  )}
+                </SettingBlock>
+
+                <button className="btn btn-accent" onClick={handleSaveAI} disabled={isSaving || !!apiKeyError} style={{ marginTop: 8 }}>
                   {isSaving ? 'Saving…' : 'Save AI settings'}
                 </button>
               </SectionContent>
@@ -649,17 +752,46 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ onLogout }) => {
             {activeSection === 'danger' && (
               <SectionContent title="Danger zone">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <DangerRow
-                    label="Wipe flashcard progress"
-                    desc="Reset all SRS progress. Your flashcards remain but ratings are cleared."
-                    action="Reset progress"
-                  />
-                  <DangerRow
-                    label="Delete account"
-                    desc="Permanently delete your account and all associated data. This cannot be undone."
-                    action="Delete account"
-                    onAction={onLogout}
-                  />
+                  {showResetConfirm ? (
+                    <div style={{ padding: '14px 16px', borderRadius: 'var(--r)', border: '1px solid var(--bad-soft)', background: 'var(--bg-elev)' }}>
+                      <p style={{ fontSize: 13, color: 'var(--text)', marginBottom: 12 }}>Reset all SRS progress? Your flashcards remain but ratings are cleared.</p>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn" style={{ color: 'var(--bad)', borderColor: 'var(--bad-soft)' }} onClick={async () => {
+                          try {
+                            await SettingsService.updateSettings({ resetFlashcardProgress: true });
+                            setSaveSuccess(true); setTimeout(() => setSaveSuccess(false), 3000);
+                          } catch { setSaveError('Failed to reset progress.'); }
+                          setShowResetConfirm(false);
+                        }}>Confirm reset</button>
+                        <button className="btn" onClick={() => setShowResetConfirm(false)}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <DangerRow
+                      label="Wipe flashcard progress"
+                      desc="Reset all SRS progress. Your flashcards remain but ratings are cleared."
+                      action="Reset progress"
+                      onAction={() => setShowResetConfirm(true)}
+                    />
+                  )}
+                  {showDeleteConfirm ? (
+                    <div style={{ padding: '14px 16px', borderRadius: 'var(--r)', border: '1px solid var(--bad)', background: 'var(--bg-elev)' }}>
+                      <p style={{ fontSize: 13, color: 'var(--text)', marginBottom: 4 }}>This will permanently delete your account and all data. This cannot be undone.</p>
+                      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>Type <strong>DELETE</strong> to confirm:</p>
+                      <input type="text" value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)} placeholder="DELETE" style={{ ...inputStyle, marginBottom: 12, borderColor: 'var(--bad-soft)' }} />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn" style={{ color: 'var(--bad)', borderColor: 'var(--bad)' }} disabled={deleteConfirmText !== 'DELETE'} onClick={onLogout}>Delete my account</button>
+                        <button className="btn" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <DangerRow
+                      label="Delete account"
+                      desc="Permanently delete your account and all associated data. This cannot be undone."
+                      action="Delete account"
+                      onAction={() => setShowDeleteConfirm(true)}
+                    />
+                  )}
                 </div>
               </SectionContent>
             )}

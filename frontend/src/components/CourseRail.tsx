@@ -76,9 +76,11 @@ const CourseRail: React.FC<CourseRailProps> = ({ navigate, onLogout }) => {
           </div>
         </div>
 
-        {/* Search box */}
+        {/* Search box — not yet implemented */}
         <button
           type="button"
+          disabled
+          title="Search coming soon"
           style={{
             width: '100%',
             marginTop: 10,
@@ -91,8 +93,9 @@ const CourseRail: React.FC<CourseRailProps> = ({ navigate, onLogout }) => {
             borderRadius: 'var(--r-sm)',
             color: 'var(--text-soft)',
             fontSize: 12,
-            cursor: 'pointer',
+            cursor: 'not-allowed',
             textAlign: 'left',
+            opacity: 0.5,
           }}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">

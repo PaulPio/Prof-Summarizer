@@ -252,6 +252,7 @@ const RecordPage: React.FC = () => {
   const [confusionMarkers, setConfusionMarkers] = useState<number[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [pushToNotion, setPushToNotion] = useState(false);
+  const [showAudioProviderWarning, setShowAudioProviderWarning] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -280,10 +281,23 @@ const RecordPage: React.FC = () => {
     return false;
   }, [userSettings, navigate]);
 
+  /** Returns true if the resolved transcription provider can handle audio. */
+  const transcriptionProviderIsAudioCapable = useCallback(() => {
+    const txProvider = userSettings?.transcriptionProvider ?? userSettings?.aiProvider;
+    if (!txProvider) return true;
+    if (txProvider === 'anthropic') return false;
+    if (txProvider === 'openrouter') {
+      const txModel = userSettings?.transcriptionModel ?? userSettings?.aiModel ?? '';
+      return txModel.startsWith('google/');
+    }
+    return true;
+  }, [userSettings]);
+
   const handleImportAudioClick = useCallback(() => {
     if (!ensureAiReady()) return;
+    if (!transcriptionProviderIsAudioCapable()) { setShowAudioProviderWarning(true); return; }
     audioInputRef.current?.click();
-  }, [ensureAiReady]);
+  }, [ensureAiReady, transcriptionProviderIsAudioCapable]);
 
   useEffect(() => {
     if ((status === AppState.REVIEWING || showSetup) && activeCourseId) setSelectedCourseId(activeCourseId);
@@ -291,6 +305,7 @@ const RecordPage: React.FC = () => {
 
   const handleOpenSetup = () => {
     if (!ensureAiReady()) return;
+    if (!transcriptionProviderIsAudioCapable()) { setShowAudioProviderWarning(true); return; }
     if (activeCourseId) setSelectedCourseId(activeCourseId);
     setShowSetup(true);
   };
@@ -475,6 +490,27 @@ const RecordPage: React.FC = () => {
     }
   };
 
+  /* ─── Audio provider warning modal ─── */
+  if (showAudioProviderWarning) {
+    const txProvider = userSettings?.transcriptionProvider ?? userSettings?.aiProvider;
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+        <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: 28, maxWidth: 420, width: '90%', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ fontSize: 18, fontWeight: 600 }}>⚠️ Provider doesn't support audio</div>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0, lineHeight: 1.6 }}>
+            {txProvider === 'anthropic'
+              ? 'Anthropic/Claude cannot transcribe audio. Please set a separate transcription model (Gemini or OpenAI) in Settings → AI.'
+              : 'The selected OpenRouter model may not support audio. Switch to a Google Gemini model or set a separate transcription provider in Settings → AI.'}
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-accent" onClick={() => { setShowAudioProviderWarning(false); navigate('/settings?tab=ai'); }}>Go to Settings</button>
+            <button className="btn" onClick={() => setShowAudioProviderWarning(false)}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   /* ─── SETUP ─── */
   if (status === AppState.IDLE && showSetup) {
     return (
@@ -524,7 +560,7 @@ const RecordPage: React.FC = () => {
                 <div style={{ width: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}><MicIcon /></div>
                 <span style={{ fontSize: 12.5, fontWeight: 500, width: 140, flexShrink: 0 }}>Source</span>
                 <span style={{ fontSize: 12.5, color: 'var(--text-muted)', flex: 1 }}>Built-in microphone · 16kbps mono</span>
-                <button className="btn btn-ghost" style={{ padding: '3px 8px', fontSize: 11.5 }}>Change</button>
+                <button className="btn btn-ghost" disabled title="Microphone selection coming soon" style={{ padding: '3px 8px', fontSize: 11.5, opacity: 0.5, cursor: 'not-allowed' }}>Change</button>
               </div>
               {/* On stop */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)' }}>

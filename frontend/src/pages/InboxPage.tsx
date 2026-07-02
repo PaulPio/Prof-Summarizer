@@ -191,8 +191,12 @@ const InboxPage: React.FC = () => {
   };
 
   const handlePrimary = (item: InboxItem) => {
-    if (item.kind === 'study-plan') navigate('/planner');
-    else if (item.lectureId) navigate(`/lecture/${item.lectureId}`);
+    if (item.kind === 'study-plan') {
+      if (STUDY_PLANNER_ENABLED) navigate('/planner');
+      else dismiss(item.id); // planner disabled — just dismiss
+      return;
+    }
+    if (item.lectureId) navigate(`/lecture/${item.lectureId}`);
     dismiss(item.id);
   };
 
